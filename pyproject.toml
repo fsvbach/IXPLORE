@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ixplore"
+version = "0.1.0"
+description = "Iterative Positioning via Logistic Regression Embedding"
+authors = [
+    {name = "Fynn Bachmann", email = "fynn.bachmann@uzh.ch"}
+]
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.11"
+keywords = ["embedding", "machine learning", "dimensionality reduction", "bayesian", "logistic regression"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "numpy",
+    "scikit-learn",
+    "matplotlib",
+    "pandas",
+    "scipy",
+]
+
+[project.urls]
+Homepage = "https://github.com/fybach/ixplore"
+Repository = "https://github.com/fybach/ixplore"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["ixplore*"]

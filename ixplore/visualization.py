@@ -1,0 +1,154 @@
+from matplotlib import axes, rcParams
+from matplotlib.colors import LinearSegmentedColormap
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+
+from .logger import logger
+
+plt.rcParams.update({
+    "figure.figsize": (5, 5),
+    "figure.dpi": 300,
+    "axes.labelsize": 7, 
+    "font.size": 7,
+    "legend.fontsize": 6,
+    "xtick.labelsize": 5,
+    "ytick.labelsize": 5,
+    'lines.linewidth': 1,
+    "axes.facecolor":'None',
+    'axes.titlesize': 7,
+    'axes.titlepad' : 1,    
+    'axes.linewidth': 0.5})
+
+# Define the colors
+pruple_hex = '#0127A4'
+blue_hex = '#7696FE'
+red_hex = '#DC6025'
+orange_hex = '#EAA07D'
+neutral_color = '#D9E1E8'
+
+# Create custom colormap
+colors = [blue_hex, neutral_color, orange_hex]
+n_bins = 10  # Number of bins for levels
+cmap_name = 'custom_cmap'
+colormap = LinearSegmentedColormap.from_list(cmap_name, colors, N=n_bins)
+
+def figure(ax=None):
+    if not ax:
+        fig, ax = plt.subplots()
+        return fig, ax
+    else:
+        return ax.figure, ax
+
+def clean_axis(ax: axes.Axes):
+    ax.set(aspect='equal',
+           xticks=[],
+           yticks=[])
+    return ax
+
+def plot_embedding(embedding: pd.DataFrame, 
+                   colors="black", 
+                   ax=None, 
+                   user=None,
+                   highlight={},
+                   **kwargs) -> axes.Axes:
+    fig, ax = figure(ax)
+
+    kwargs = {"zorder": 2, "edgecolors": "black", "s": 40, "lw": 0.5}
+    kwargs.update(**kwargs)
+    ax.scatter(embedding.loc[:, 'x'], 
+               embedding.loc[:, 'y'], 
+               c=colors, 
+               **kwargs)
+    
+    if user is not None:
+        params = {'edgecolor': 'white', 's':7, 'lw':1, 'zorder':5, 'color':"None", 'label':f"User {user}"}
+        params.update(highlight)
+        color = colors[embedding.index.get_loc(user)]
+        ax.scatter(embedding.loc[user, 'x'], embedding.loc[user, 'y'], c=color, **kwargs)
+        ax.scatter(embedding.loc[user, 'x'], embedding.loc[user, 'y'], **params)
+    return ax
+
+def plot_likelihood(xplore, 
+                    feature: int, 
+                    cmap=colormap, 
+                    ax=None) -> axes.Axes:
+    fig, ax = figure(ax)
+
+    meshgrid_size = int(np.sqrt(xplore.X.shape[0]))
+    xx = xplore.X[:, 0].reshape(meshgrid_size, meshgrid_size)
+    yy = xplore.X[:, 1].reshape(meshgrid_size, meshgrid_size)
+
+    # Predict probabilities on the grid
+    Z = xplore.likelihood_X[:,xplore.items.get_loc(feature)]
+    Z = Z.reshape(xx.shape)
+
+    # Plot the decision boundary at 50% probability
+    ax.contour(xx, yy, Z, levels=[0.5], colors="black", linestyles="--")
+    contour = ax.contourf(xx, yy, Z, alpha=0.8, cmap=cmap, levels=np.linspace(0, 1, 11), zorder=1)
+    cbar = plt.colorbar(contour, ax=ax)
+    cbar.set_label('Likelihood')
+    return ax
+
+def plot_posterior(xplore, 
+                   answers: pd.Series, 
+                   cmap=colormap,
+                   ax=None) -> axes.Axes:
+    fig, ax = figure(ax)
+
+    meshgrid_size = int(np.sqrt(xplore.X.shape[0]))
+    xx = xplore.X[:, 0].reshape(meshgrid_size, meshgrid_size)
+    yy = xplore.X[:, 1].reshape(meshgrid_size, meshgrid_size)
+
+    # Predict probabilities on the grid
+    Z = xplore.posterior_X(answers)
+    Z = Z.reshape(xx.shape)
+    # Plot heatmap of probability
+    contour = ax.contourf(xx, yy, Z, alpha=0.8, cmap=cmap, zorder=1)
+    cbar = plt.colorbar(contour, ax=ax)
+    cbar.set_label('Probability')
+    cbar.ax.ticklabel_format(style="sci", axis="y", scilimits=(0,0))
+    return ax
+
+def plot_overview(xplore, n, q, colors='black', figsize=(7,4)) -> None:
+    """
+    Plot an overview of the posterior distribution for a user and the likelihood for a question, along with the embedding.
+    
+    Parameters
+    ----------
+    xplore : IXPLORE
+        The IXPLORE model instance containing the data and methods for computing the posterior and likelihood.
+    n : str
+        The user for whom to plot the posterior distribution.
+    q : str
+        The question for which to plot the likelihood.
+    colors : array-like or str, optional
+        The colors to use for the embedding points. Can be a single color or an array of colors corresponding to each point. Default is 'black'.
+    figsize : tuple, optional
+        The size of the figure in inches. Default is (7, 4).
+    """
+    fig, (ax1, ax2) = plt.subplots(1,2, figsize=figsize)
+    for ax in (ax1, ax2):
+        clean_axis(ax)
+
+    i = xplore.users.get_loc(n)
+    user = xplore.reactions[i, :]
+    answers = pd.Series(user, index=xplore.items, name=n).dropna()
+    plot_posterior(xplore, answers, ax=ax1)
+    plot_embedding(xplore.get_embedding(), colors=colors, s=60,
+                   user=n, highlight={'s': 60, 'edgecolor': 'white'},
+                   ax=ax1)
+
+    x, y = xplore.embed_new_user(answers)
+    ax1.scatter(x, y, marker='x', color='black', s=10, label='Optimized Coordinates', zorder=5)
+    _ = ax1.set_title(f'Posterior for User {n}')
+
+    i = xplore.items.get_loc(q)
+    plot_likelihood(xplore, q, ax=ax2)
+    plot_embedding(xplore.get_embedding(), colors=xplore.reactions[:,i], s=60,
+                   user=n, highlight={'s': 60, 'edgecolor': 'white'},
+                   ax=ax2)
+    _ = ax2.set_title(f'Likelihood for Question {q}')
+
+    mae, acc = xplore.evaluate()
+    logger.info(f'MAE: {mae}, ACC: {acc}')
