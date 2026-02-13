@@ -35,8 +35,8 @@ pip install -e .
 import pandas as pd
 from ixplore import IXPLORE
 
-# Load reaction data (users × items matrix, values in [0, 1])
-reactions = pd.read_csv('../data/synthetic_reactions.csv', index_col=0)
+# Load reaction data (users × items matrix, values in {0, 1})
+reactions = pd.read_csv('../data/binary_reactions.csv', index_col=0)
 
 # Initialize and fit the model
 model = IXPLORE(reactions, pca_initialization=True)
@@ -85,13 +85,13 @@ model = IXPLORE(
 ### Visualization
 
 ```python
-from ixplore.visualization import plot_embedding, plot_overview
+from ixplore.visualization import plot_overview
+
+# Load user metadata (e.g., colors for plotting)
+users = pd.read_csv('../data/synthetic_users.csv', index_col=0)
 
 # Plot user embeddings
-plot_embedding(model.get_embedding(), colors='blue')
-
-# Plot comprehensive overview
-plot_overview(model, n=0, q='Q1', colors=user_colors)
+plot_overview(model, n='0', q='Q12', colors=users.color, figsize=(7,2.5))
 ```
 
 ## API Reference
