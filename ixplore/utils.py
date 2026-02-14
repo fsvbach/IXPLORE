@@ -37,6 +37,31 @@ def sparsen(
     return pd.DataFrame(sparse_array, index=df.index, columns=df.columns)
 
 
+def scale_reactions(
+    reactions: np.ndarray,
+    min_value: float = 0.0,
+    max_value: float = 1.0,
+    ) -> np.ndarray:
+    """
+    Scale the reaction values to a specified range.
+
+    Parameters
+    ----------
+    reactions : np.ndarray
+        The input array of reaction values to be scaled.
+    min_value : float, optional
+        The minimum value of the scaled range (default is 0.0).
+    max_value : float, optional
+        The maximum value of the scaled range (default is 1.0). 
+
+    Returns
+    -------
+    np.ndarray
+        The scaled reaction values.
+    """
+    scaled = (reactions - np.nanmin(reactions)) / (np.nanmax(reactions) - np.nanmin(reactions))
+    return scaled * (max_value - min_value) + min_value
+
 def extract_parameters(model: LogisticRegression) -> np.ndarray:
     """
     Extract the parameters from a fitted logistic regression model.

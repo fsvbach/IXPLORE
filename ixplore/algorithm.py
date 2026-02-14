@@ -11,8 +11,7 @@ import pandas as pd
 import numpy as np
 
 from .logger import logger
-from .utils import extract_parameters, binarize, add_ones, create_meshgrid, compute_rasch_values
-
+from . import utils
 
 class IXPLORE:
     def __init__(
@@ -29,7 +28,7 @@ class IXPLORE:
         random_state: int = 0,
         transformation: np.ndarray = np.identity(2),
     ) -> None:
-        """Initialize the iXpLoRE model.
+        """Initialize the IXPLORE model.
 
         Parameters
         ----------
@@ -58,7 +57,7 @@ class IXPLORE:
         """
 
         ### Store data as numpy arrays
-        self.reactions = reactions.values
+        self.reactions = utils.scale_reactions(reactions.values)
         self.users = reactions.index.astype(str)
         self.items = reactions.columns.astype(str)
         self.number_of_users = len(self.users) # N
@@ -70,7 +69,7 @@ class IXPLORE:
         ### Create grid
         self.sampling_resolution = sampling_resolution
         self.limits = (xlimits[0], xlimits[1], ylimits[0], ylimits[1])
-        self.X = create_meshgrid(self.limits, self.sampling_resolution) 
+        self.X = utils.create_meshgrid(self.limits, self.sampling_resolution) 
         logger.info(f"Grid created with resolution {self.sampling_resolution}x{self.sampling_resolution}, total {self.X.shape[0]} points")
 
         ### Set prior
@@ -112,7 +111,7 @@ class IXPLORE:
             logger.info("Fitted model parameters from embedding.")
 
     def __str__(self) -> str:
-        return 'iXpLoRE'
+        return 'IXPLORE'
 
     def set_prior(self, prior_mean: np.ndarray, prior_cov: np.ndarray) -> None:
         """Set the prior distribution over the 2D space."""
@@ -205,7 +204,7 @@ class IXPLORE:
             mask = ~np.isnan(self.reactions[:, i])
             train_data   = self.embedding[mask]
             train_labels = self.reactions[mask, i]
-            train_labels = binarize(train_labels, self.generator)
+            train_labels = utils.binarize(train_labels, self.generator)
             assert len(np.unique(train_labels)) == 2, f"No model fitted for Feature {item}."
             model.fit(train_data, train_labels)
             models[item] = model
@@ -214,7 +213,7 @@ class IXPLORE:
 
     def update_likelihoods(self) -> None:
         """Update likelihoods on X-grid based on current models."""
-        self.item_parameters = np.vstack([extract_parameters(model) for model in self.models.values()])
+        self.item_parameters = np.vstack([utils.extract_parameters(model) for model in self.models.values()])
         self.likelihood_X = self.predict(self.X)
 
     def get_likelihoods(self) -> pd.DataFrame:
@@ -297,7 +296,7 @@ class IXPLORE:
         """
         if method == 'rasch':
             mean_answer = self.impute_remaining_answers(answers)
-            probs, answer_options = compute_rasch_values(mean_answer, num_options, variance=variance)
+            probs, answer_options = utils.compute_rasch_values(mean_answer, num_options, variance=variance)
             K, Q = probs.shape
             # Repeat probs for k samples: shape (k, K, Q)
             log_probs = np.log(probs)[None, :, :]          # (1, K, Q)
@@ -340,7 +339,7 @@ class IXPLORE:
         if not len(params):
             return np.array([])
         assert self.item_parameters is not None, "Item parameters must be fitted before predicting."
-        params = add_ones(params.reshape(-1,2))
+        params = utils.add_ones(params.reshape(-1,2))
         return_value = expit(params@self.item_parameters[index,:].T)
         return return_value
 

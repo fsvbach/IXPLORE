@@ -4,15 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ixplore"
-version = "0.1.0"
-description = "Iterative Positioning via Logistic Regression Embedding"
+version = "0.1.1"
+description = "Iterative Probabilistic Logistic Regression Embedding"
 authors = [
     {name = "Fynn Bachmann", email = "fynn.bachmann@uzh.ch"}
 ]
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.11"
-keywords = ["embedding", "machine learning", "dimensionality reduction", "bayesian", "logistic regression"]
+keywords = ["political data", "machine learning", "dimensionality reduction", "spatial modeling", "logistic regression", "item response theory"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",

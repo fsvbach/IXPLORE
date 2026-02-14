@@ -1,10 +1,16 @@
 # IXPLORE
 
-**Iterative Positioning via Logistic Regression Embedding:** A Python package for embedding users and items of political questionnaires in a shared 2D latent space. 
+**Iterative Probabilistic Logistic Regression Embedding:** A Python package for embedding users and items of political questionnaires in a shared 2D latent space. 
 
-IXPLORE jointly learns a posterior distribution for each user and a logistic regression model for each question. This can be used to visualize the political landscpae in a two dimensional, interpretable space. In inference, it can be used for missing value imputation and answer prediction.
+![IXPLORE overview](docs/overview_new_user.png)
+
+## Applicable data
+
+IXPLORE is designed for user-item reaction matrices commonly found in political questionnaires. It's well suited for binary data (e.g., agree/disagree) and Likert-scale responses, where each question measures different preferences dimensions. Use IXPLORE when you want a compact, interpretable 2D visualization of the latent political landscape or when you need interpretable imputation of missing responses based on user positions.
 
 ## Features
+
+IXPLORE jointly learns a posterior distribution for each user and a logistic regression model for each question. This is used to visualize the political landscpae in a two dimensional space. In inference, it can be used for missing value imputation and answer prediction.
 
 - **User Embedding**: Compute posterior distributions over user positions using observed reactions
 - **Item Models**: Define decision boundaries in the latent space for each item by learning logistic regression models
@@ -29,7 +35,7 @@ cd ixplore
 pip install -e .
 ```
 
-## Quick Start
+### Quick Start
 
 ```python
 import pandas as pd
@@ -52,8 +58,6 @@ position = model.embed_new_user(new_user_answers)
 # Predict all answers for a user
 predicted = model.predict_all_answers(new_user_answers)
 ```
-
-## Usage
 
 ### Custom Configuration
 
@@ -93,8 +97,6 @@ users = pd.read_csv('../data/synthetic_users.csv', index_col=0)
 # Plot user embeddings
 plot_overview(model, n='0', q='Q12', colors=users.color, figsize=(7,2.5))
 ```
-
-## API Reference
 
 ### IXPLORE Class
 
