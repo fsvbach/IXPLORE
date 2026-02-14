@@ -1,24 +1,24 @@
 # IXPLORE
 
-**Iterative Probabilistic Logistic Regression Embedding:** A Python package for embedding users and items of political questionnaires in a shared 2D latent space. 
+**Iterative Probabilistic Logistic Regression Embedding:** A Python package for embedding users and questionnaire items in a shared 2D latent space. 
 
 ![IXPLORE overview](docs/overview_new_user.png)
 
 ## Applicable data
 
-IXPLORE is designed for user-item reaction matrices commonly found in political questionnaires. It's well suited for binary data (e.g., agree/disagree) and Likert-scale responses, where each question measures different preferences dimensions. Use IXPLORE when you want a compact, interpretable 2D visualization of the latent political landscape or when you need interpretable imputation of missing responses based on user positions.
+IXPLORE is designed for user-item reaction matrices commonly found in political questionnaires. It's well suited for binary data (e.g., agree/disagree) and Likert-scale responses, where each question measures different preferences dimensions. Use IXPLORE when you want a compact, interpretable 2D visualization of the latent political landscape or when you need interpretable imputation of missing responses based on users' latent positions.
 
 ## Features
 
-IXPLORE jointly learns a posterior distribution for each user and a logistic regression model for each question. This is used to visualize the political landscpae in a two dimensional space. In inference, it can be used for missing value imputation and answer prediction.
+IXPLORE jointly learns a posterior distribution for each user and a logistic regression model for each questionnaire item. It visualizes the political landscpae in a two dimensional space. In inference, it can impute missing values and generate answers based on any latent position.
 
-- **User Embedding**: Compute posterior distributions over user positions using observed reactions
-- **Item Models**: Define decision boundaries in the latent space for each item by learning logistic regression models
+- **User Embedding**: Compute posterior distributions for users based on their reactions
+- **Item Models**: Define decision boundaries for each questions with logistic regression models
 - **Iterative Refinement**: Jointly optimize user embeddings and item models through iterative updates
 - **Flexible Initialization**: Initialize embeddings via PCA, random values, or load pretrained embeddings
 - **Missing Data Handling**: Robust to missing values in the user-item reaction matrix
-- **Answer Imputation**: Predict missing answers based on learned user positions
-- **New User Embedding**: Embed new users based on their responses and obtain optimal positions with uncertainty quantification
+- **Answer Imputation**: Predict answers based on positions in latent space
+- **New User Embedding**: Embed new users in the latent space with uncertainty quantification
 - **Visualization Tools**: Built-in plotting functions for embeddings, posteriors, and item decision boundaries
 
 ## Installation
@@ -82,7 +82,7 @@ model = IXPLORE(
 # Load pretrained embedding and model parameters
 model = IXPLORE(
     reactions,
-    pretrained_embedding='../data/synthetic_embedding.csv',
+    pretrained_embedding='../data/pretrained_embedding.csv',
 )
 ```
 
@@ -95,7 +95,7 @@ from ixplore.visualization import plot_overview
 users = pd.read_csv('../data/synthetic_users.csv', index_col=0)
 
 # Plot user embeddings
-plot_overview(model, n='0', q='Q12', colors=users.color, figsize=(7,2.5))
+plot_overview(model, question='Q12', user='0', colors=users.color, figsize=(7,2.5))
 ```
 
 ### IXPLORE Class
