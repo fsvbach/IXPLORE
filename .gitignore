@@ -1,6 +1,15 @@
 .vscode/
+
+# Package metadata
 ixplore.egg-info/
+
+# Python caches
 __pycache__/
-.DS_Store
 .pytest_cache/
+.mypy_cache/
+
+# Distribution builds
 dist/
+
+# macOS
+.DS_Store

@@ -2,7 +2,7 @@
 
 **Iterative Probabilistic Logistic Regression Embedding:** A Python package for embedding users and questionnaire items in a shared 2D latent space. 
 
-![IXPLORE overview](docs/overview_new_user.png)
+![IXPLORE overview](https://raw.githubusercontent.com/fsvbach/IXPLORE/refs/heads/main/docs/overview_new_user.png)
 
 ## Applicable data
 
@@ -146,7 +146,7 @@ If you use IXPLORE in your research, please cite:
 ```bibtex
 @software{bachmann2026ixplore,
   author       = {Bachmann, Fynn},
-  title        = {IXPLORE: Iterative Positioning via Logistic Regression Embedding},
+  title        = {IXPLORE: Iterative Probabilistic Logistic Regression Embedding},
   year         = {2026},
   publisher    = {GitHub},
   url          = {https://github.com/fybach/ixplore}
@@ -155,4 +155,4 @@ If you use IXPLORE in your research, please cite:
 
 Or in text format:
 
-> Bachmann, F. (2026). IXPLORE: Iterative Positioning via Logistic Regression Embedding. GitHub. https://github.com/fybach/ixplore
+> Bachmann, F. (2026). IXPLORE: Iterative Probabilistic Logistic Regression Embedding. GitHub. https://github.com/fybach/ixplore

@@ -91,7 +91,7 @@ def plot_likelihood(
     feature: str,
     cmap: Colormap = colormap,
     ax: axes.Axes | None = None,
-) -> tuple[Figure, axes.Axes]:
+) -> tuple[Figure | SubFigure, axes.Axes]:
     fig, ax = figure(ax)
 
     meshgrid_size = int(np.sqrt(xplore.X.shape[0]))
@@ -117,7 +117,7 @@ def plot_posterior(
     cmap: Colormap = colormap,
     ax: axes.Axes | None = None,
     add_bar: bool = True,
-) -> tuple[Figure, axes.Axes]:
+) -> tuple[Figure | SubFigure, axes.Axes]:
     fig, ax = figure(ax)
 
     meshgrid_size = int(np.sqrt(xplore.X.shape[0]))
@@ -148,7 +148,7 @@ def plot_overview(
     user: str | None = None,
     colors: npt.ArrayLike | str = 'black',
     figsize: tuple[float, float] = (7, 4),
-) -> tuple[plt.Figure, tuple[axes.Axes, axes.Axes]]:
+) -> tuple[Figure | SubFigure, tuple[axes.Axes, axes.Axes]]:
     """
     Plot an overview of the posterior distribution for a user and the likelihood for a question, along with the embedding.
     

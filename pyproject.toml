@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ixplore"
-version = "0.1.1"
+version = "0.1.2"
 description = "Iterative Probabilistic Logistic Regression Embedding"
 authors = [
     {name = "Fynn Bachmann", email = "fynn.bachmann@uzh.ch"}
