@@ -59,7 +59,7 @@ def clean_axis(ax: axes.Axes) -> axes.Axes:
 
 def plot_embedding(
     embedding: pd.DataFrame,
-    colors: np.array | str = 'gray',
+    colors: np.ndarray | str = 'gray',
     ax: axes.Axes | None = None,
     user: str | None = None,
     highlight: dict[str, Any] | None = None,
@@ -150,7 +150,7 @@ def plot_overview(
     xplore: IXPLORE,
     question: str,
     user: str | None = None,
-    colors: np.array | str = 'gray',
+    colors: np.ndarray | str = 'gray',
     cmap: Colormap = plt.colormaps['viridis'],
     figsize: tuple[float, float] = (7, 4),
 ) -> tuple[Figure | SubFigure, tuple[axes.Axes, axes.Axes]]:
