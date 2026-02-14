@@ -2,7 +2,7 @@
 
 **Iterative Probabilistic Logistic Regression Embedding:** A Python package for embedding users and questionnaire items in a shared 2D latent space. 
 
-![IXPLORE overview](https://raw.githubusercontent.com/fsvbach/IXPLORE/refs/heads/main/docs/overview_new_user.png)
+![IXPLORE overview](https://raw.githubusercontent.com/fsvbach/IXPLORE/refs/heads/main/docs/overview.png)
 
 ## Applicable data
 
