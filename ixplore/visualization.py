@@ -1,10 +1,19 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
 from matplotlib import axes, rcParams
-from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.colors import Colormap, LinearSegmentedColormap
+from matplotlib.figure import Figure, SubFigure
 import matplotlib.pyplot as plt
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
 
 from .logger import logger
+
+if TYPE_CHECKING:
+    from .algorithm import IXPLORE
 
 plt.rcParams.update({
     "figure.figsize": (5, 5),
@@ -31,48 +40,58 @@ neutral_color = '#D9E1E8'
 colors = [blue_hex, neutral_color, orange_hex]
 n_bins = 10  # Number of bins for levels
 cmap_name = 'custom_cmap'
-colormap = LinearSegmentedColormap.from_list(cmap_name, colors, N=n_bins)
+colormap: Colormap = LinearSegmentedColormap.from_list(cmap_name, colors, N=n_bins)
 
-def figure(ax=None):
+
+def figure(ax: axes.Axes | None = None) -> tuple[Figure | SubFigure, axes.Axes]:
     if not ax:
         fig, ax = plt.subplots()
         return fig, ax
     else:
         return ax.figure, ax
 
-def clean_axis(ax: axes.Axes):
+
+def clean_axis(ax: axes.Axes) -> axes.Axes:
     ax.set(aspect='equal',
            xticks=[],
            yticks=[])
     return ax
 
-def plot_embedding(embedding: pd.DataFrame, 
-                   colors="black", 
-                   ax=None, 
-                   user=None,
-                   highlight={},
-                   **kwargs) -> axes.Axes:
+
+def plot_embedding(
+    embedding: pd.DataFrame,
+    colors: npt.ArrayLike | str = "black",
+    ax: axes.Axes | None = None,
+    user: str | None = None,
+    highlight: dict[str, Any] | None = None,
+    **kwargs: Any,
+) -> axes.Axes:
+    if highlight is None:
+        highlight = {}
     fig, ax = figure(ax)
 
-    kwargs = {"zorder": 2, "edgecolors": "black", "s": 40, "lw": 0.5}
-    kwargs.update(**kwargs)
+    scatter_kwargs: dict[str, Any] = {"zorder": 2, "edgecolors": "black", "s": 40, "lw": 0.5}
+    scatter_kwargs.update(**kwargs)
     ax.scatter(embedding.loc[:, 'x'], 
                embedding.loc[:, 'y'], 
                c=colors, 
-               **kwargs)
+               **scatter_kwargs)
     
     if user is not None:
-        params = {'edgecolor': 'white', 's':7, 'lw':1, 'zorder':5, 'color':"None", 'label':f"User {user}"}
+        params: dict[str, Any] = {'edgecolor': 'white', 's':7, 'lw':1, 'zorder':5, 'color':"None", 'label':f"User {user}"}
         params.update(highlight)
-        color = colors[embedding.index.get_loc(user)]
-        ax.scatter(embedding.loc[user, 'x'], embedding.loc[user, 'y'], c=color, **kwargs)
+        color = colors[embedding.index.get_loc(user)]  # type: ignore[index]
+        ax.scatter(embedding.loc[user, 'x'], embedding.loc[user, 'y'], c=color, **scatter_kwargs)
         ax.scatter(embedding.loc[user, 'x'], embedding.loc[user, 'y'], **params)
     return ax
 
-def plot_likelihood(xplore, 
-                    feature: int, 
-                    cmap=colormap, 
-                    ax=None) -> axes.Axes:
+
+def plot_likelihood(
+    xplore: IXPLORE,
+    feature: str,
+    cmap: Colormap = colormap,
+    ax: axes.Axes | None = None,
+) -> axes.Axes:
     fig, ax = figure(ax)
 
     meshgrid_size = int(np.sqrt(xplore.X.shape[0]))
@@ -80,6 +99,7 @@ def plot_likelihood(xplore,
     yy = xplore.X[:, 1].reshape(meshgrid_size, meshgrid_size)
 
     # Predict probabilities on the grid
+    assert xplore.likelihood_X is not None, "Likelihoods must be computed before plotting."
     Z = xplore.likelihood_X[:,xplore.items.get_loc(feature)]
     Z = Z.reshape(xx.shape)
 
@@ -90,10 +110,13 @@ def plot_likelihood(xplore,
     cbar.set_label('Likelihood')
     return ax
 
-def plot_posterior(xplore, 
-                   answers: pd.Series, 
-                   cmap=colormap,
-                   ax=None) -> axes.Axes:
+
+def plot_posterior(
+    xplore: IXPLORE,
+    answers: pd.Series,
+    cmap: Colormap = colormap,
+    ax: axes.Axes | None = None,
+) -> axes.Axes:
     fig, ax = figure(ax)
 
     meshgrid_size = int(np.sqrt(xplore.X.shape[0]))
@@ -110,7 +133,14 @@ def plot_posterior(xplore,
     cbar.ax.ticklabel_format(style="sci", axis="y", scilimits=(0,0))
     return ax
 
-def plot_overview(xplore, n, q, colors='black', figsize=(7,4)) -> None:
+
+def plot_overview(
+    xplore: IXPLORE,
+    n: str,
+    q: str,
+    colors: npt.ArrayLike | str = 'black',
+    figsize: tuple[float, float] = (7, 4),
+) -> None:
     """
     Plot an overview of the posterior distribution for a user and the likelihood for a question, along with the embedding.
     

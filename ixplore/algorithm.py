@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import Literal
+
 from sklearn.decomposition import PCA
 from sklearn.linear_model import LogisticRegression
 from sklearn.impute import SimpleImputer
@@ -9,20 +13,22 @@ import numpy as np
 from .logger import logger
 from .utils import extract_parameters, binarize, add_ones, create_meshgrid, compute_rasch_values
 
-class IXPLORE():
-    def __init__(self, 
-                 reactions: pd.DataFrame, 
-                 prior_mean: np.ndarray = np.array([0, 0]), 
-                 prior_cov: np.ndarray = np.array([[.1, 0], [0, .1]]), 
-                 sampling_resolution: int = 200, 
-                 xlimits: tuple = (-1, 1),
-                 ylimits: tuple = (-1, 1),
-                 pretrained_models: str = '',
-                 pretrained_embedding: str = '',
-                 pca_initialization: bool = True,
-                 random_state: int = 0,
-                 transformation: np.ndarray = np.identity(2)
-                 ):
+
+class IXPLORE:
+    def __init__(
+        self,
+        reactions: pd.DataFrame,
+        prior_mean: np.ndarray = np.array([0, 0]),
+        prior_cov: np.ndarray = np.array([[.1, 0], [0, .1]]),
+        sampling_resolution: int = 200,
+        xlimits: tuple[float, float] = (-1, 1),
+        ylimits: tuple[float, float] = (-1, 1),
+        pretrained_models: str = '',
+        pretrained_embedding: str = '',
+        pca_initialization: bool = True,
+        random_state: int = 0,
+        transformation: np.ndarray = np.identity(2),
+    ) -> None:
         """Initialize the iXpLoRE model.
 
         Parameters
@@ -74,11 +80,11 @@ class IXPLORE():
         logger.info(f"Prior set with mean {self.prior_mean} and covariance {self.prior_cov.flatten()}")
 
         ### Initialize other variables
-        self.models = {} 
-        self.item_parameters = None 
-        self.likelihood_X = None 
-        self.posteriors = None 
-        self.embedding = None
+        self.models: dict[str, LogisticRegression] = {}
+        self.item_parameters: np.ndarray | None = None
+        self.likelihood_X: np.ndarray | None = None
+        self.posteriors: np.ndarray | None = None
+        self.embedding: np.ndarray | None = None
         self.generator = np.random.Generator(np.random.PCG64(seed=random_state))
         logger.info(f"Random state set to {random_state}")
 
@@ -105,15 +111,15 @@ class IXPLORE():
             self.fit_models()
             logger.info("Fitted model parameters from embedding.")
 
-    def __str__(self):
+    def __str__(self) -> str:
         return 'iXpLoRE'
-    
-    def set_prior(self, prior_mean, prior_cov):
+
+    def set_prior(self, prior_mean: np.ndarray, prior_cov: np.ndarray) -> None:
         """Set the prior distribution over the 2D space."""
         self.prior = multivariate_normal(prior_mean, prior_cov)                 # scipy obj
         self.prior_X = self.prior.pdf(self.X) / self.prior.pdf(self.X).sum()    # (grid_size*grid_size,)
-    
-    def load_embedding(self, path):
+
+    def load_embedding(self, path: str) -> None:
         """Load pretrained user embeddings from a CSV file."""
         dataframe = pd.read_csv(path, index_col=0)
         self.embedding = dataframe.values
@@ -121,7 +127,7 @@ class IXPLORE():
         assert dataframe.columns.tolist() == ['x', 'y'], "Columns in the pretrained embedding must be ['x', 'y']."
         logger.info(f"Pretrained embedding loaded from {path}")
 
-    def load_models(self, path):
+    def load_models(self, path: str) -> None:
         """Load pretrained model parameters from a CSV file."""
         self.item_parameters = pd.read_csv(path, index_col=0).rename(index=str)
         assert self.item_parameters.shape[0] == self.number_of_items, "Number of items in the pretrained model parameters does not match the number of items in the data."
@@ -129,25 +135,26 @@ class IXPLORE():
         self.likelihood_X = self.predict(self.X)
         logger.info(f"Pretrained model parameters loaded from {path}")
 
-    def initialize_with_PCA(self):
+    def initialize_with_PCA(self) -> None:
         """Initialize user embeddings using PCA on the reaction data and center them."""
         imputer = SimpleImputer(strategy='mean')
         X_imputed = imputer.fit_transform(self.reactions)
         self.embedding = PCA(n_components=2).fit_transform(X_imputed)
         self.normalize_embedding()
 
-    def get_embedding(self):
+    def get_embedding(self) -> pd.DataFrame:
         """Get the current user embeddings."""
         return pd.DataFrame(self.embedding, index=self.users, columns=['x','y'])
 
-    def normalize_embedding(self, scaling=1.05):
+    def normalize_embedding(self, scaling: float = 1.05) -> None:
         """Center and scale the embedding to fit within the defined limits."""
+        assert self.embedding is not None, "Embedding must be initialized before normalizing."
         centroid = (self.embedding.max(axis=0) + self.embedding.min(axis=0))/2
         self.embedding -= centroid
         max_extent = np.abs(self.embedding).max(axis=0)*scaling
         self.embedding /= max_extent
 
-    def iterate(self, n_iterations=10):
+    def iterate(self, n_iterations: int = 10) -> None:
         """Perform a number of iterations of fitting posteriors and models."""
         for i in range(n_iterations):
             logger.info(f"Iteration {i+1}/{n_iterations}")
@@ -157,7 +164,7 @@ class IXPLORE():
             mae, acc = self.evaluate()
             logger.info(f"Fit MAE: {mae:.4f}, Fit accuracy: {acc:.4f}")
 
-    def fit_posteriors(self, parallelize: bool = False):
+    def fit_posteriors(self, parallelize: bool = False) -> None:
         """Compute posteriors on X-grid for every user in train set (self.reactions)."""
         ### TODO: parallelize this
         posteriors = []
@@ -171,25 +178,27 @@ class IXPLORE():
         self.posteriors = np.array(posteriors)
         self.update_embedding()
 
-    def get_posteriors(self):
+    def get_posteriors(self) -> pd.DataFrame:
         """Get the current posteriors on X-grid for every user in train set (self.reactions)."""
         return pd.DataFrame(self.posteriors, index=self.users)
-    
-    def update_embedding(self):
+
+    def update_embedding(self) -> None:
         """Update user embeddings based on current posteriors."""
+        assert self.posteriors is not None, "Posteriors must be computed before updating embedding."
         self.embedding = self.posteriors2coordinates(self.posteriors)
 
-    def transform_embedding(self, transformation: np.ndarray):
+    def transform_embedding(self, transformation: np.ndarray) -> None:
         """Apply a linear transformation to the current embedding."""
         assert transformation.shape == (2,2), "Transformation matrix must be of shape (2,2)."
         self.embedding = self.embedding @ transformation.T
         self.normalize_embedding()
         self.fit_models()
 
-    def fit_models(self):
+    def fit_models(self) -> None:
         """Fit logistic regression models for each item based on current embeddings."""
+        assert self.embedding is not None, "Embedding must be initialized before fitting models."
         ### TODO: parallelize this
-        models = {}
+        models: dict[str, LogisticRegression] = {}
         for item in self.items:
             model = LogisticRegression(random_state=0)
             i = self.items.get_loc(item)
@@ -203,20 +212,20 @@ class IXPLORE():
         self.models = models
         self.update_likelihoods()
 
-    def update_likelihoods(self):
+    def update_likelihoods(self) -> None:
         """Update likelihoods on X-grid based on current models."""
         self.item_parameters = np.vstack([extract_parameters(model) for model in self.models.values()])
         self.likelihood_X = self.predict(self.X)
 
-    def get_likelihoods(self):
+    def get_likelihoods(self) -> pd.DataFrame:
         """Get the current likelihoods on X-grid for every item."""
         return pd.DataFrame(self.likelihood_X, columns=self.items)
 
-    def get_item_parameters(self):
+    def get_item_parameters(self) -> pd.DataFrame:
         """Get the current item parameters."""
         return pd.DataFrame(self.item_parameters, index=self.items, columns=['beta1', 'beta2', 'alpha'])
-    
-    def _posterior_X(self, answer_values, answer_index):
+
+    def _posterior_X(self, answer_values: np.ndarray, answer_index: np.ndarray) -> np.ndarray:
         """Compute posterior distribution over X based on the given answers in numpy format.
 
         Parameters
@@ -234,12 +243,13 @@ class IXPLORE():
         mask = ~np.isnan(answer_values.astype(float))
         answer_values = answer_values[mask]
         answer_index = answer_index[mask]
+        assert self.likelihood_X is not None, "Likelihoods must be computed before computing posterior."
         likelihood = self.likelihood_X[:, answer_index]
         posterior = np.prod(1 - np.abs(answer_values.reshape(-1) - likelihood), axis=1)
         posterior = posterior * self.prior_X
         return posterior/ posterior.sum()
-    
-    def posterior_X(self, answers):
+
+    def posterior_X(self, answers: pd.Series) -> np.ndarray:
         """Compute the posterior distribution over X based on the given answers in pandas format.
 
         Parameters
@@ -257,12 +267,14 @@ class IXPLORE():
         logger.debug("Answer values: %s, Answer indices: %s", answer_values, answer_indices)
         return self._posterior_X(answer_values, answer_indices)
 
-    def sample_pseudo_answers(self, 
-                              answers, 
-                              method='posterior', 
-                              num_samples=1000, 
-                              num_options=5, 
-                              variance=0.1):   
+    def sample_pseudo_answers(
+        self,
+        answers: pd.Series,
+        method: Literal["rasch", "posterior", "random"] = "posterior",
+        num_samples: int = 1000,
+        num_options: int = 5,
+        variance: float = 0.1,
+    ) -> np.ndarray:   
         """Sample pseudo answers for a user with given answers.
 
         Parameters
@@ -302,8 +314,12 @@ class IXPLORE():
         else:
             samples = self.generator.random((num_samples, self.number_of_items))
         return samples
-    
-    def predict(self, params:np.array, items=None):
+
+    def predict(
+        self,
+        params: np.ndarray,
+        items: list[str] | pd.Index | None = None,
+    ) -> np.ndarray:
         """Compute predictions for given positions outside the X-grid.
 
         Parameters
@@ -323,11 +339,12 @@ class IXPLORE():
         index = self.items.get_indexer(items)
         if not len(params):
             return np.array([])
+        assert self.item_parameters is not None, "Item parameters must be fitted before predicting."
         params = add_ones(params.reshape(-1,2))
         return_value = expit(params@self.item_parameters[index,:].T)
         return return_value
-    
-    def posteriors2coordinates(self, posteriors):
+
+    def posteriors2coordinates(self, posteriors: np.ndarray) -> np.ndarray:
         """Convert posteriors on X-grid to coordinates in 2D space.
 
         Parameters
@@ -342,8 +359,8 @@ class IXPLORE():
         """
         maxidxs = np.argmax(posteriors.reshape(-1,self.sampling_resolution*self.sampling_resolution), axis=1)
         return self.X[maxidxs]
- 
-    def embed_new_user(self, answers):
+
+    def embed_new_user(self, answers: pd.Series) -> np.ndarray:
         """Embed a single user with given answers.
 
         Parameters
@@ -358,7 +375,7 @@ class IXPLORE():
         """
         return self.posteriors2coordinates(self.posterior_X(answers))[0]
 
-    def predict_all_answers(self, answers):
+    def predict_all_answers(self, answers: pd.Series) -> pd.Series:
         """Predict answers to all items for a single user with given answers.
 
         Parameters
@@ -377,7 +394,7 @@ class IXPLORE():
         P_Yn1_Yi  = P_XYn1_Yi.sum(axis=0)                                   # (K,)
         return pd.Series(P_Yn1_Yi, name=answers.name, index=self.items)
 
-    def impute_remaining_answers(self, answers):
+    def impute_remaining_answers(self, answers: pd.Series) -> pd.Series:
         """Impute answers to all items for a user with given answers.
 
         Parameters
@@ -392,8 +409,8 @@ class IXPLORE():
         """
         answers = pd.Series(index=self.items, dtype=float).fillna(answers)
         return answers.fillna(self.predict_all_answers(answers))
-    
-    def evaluate(self):
+
+    def evaluate(self) -> tuple[float, float]:
         """Evaluate model fit on training data using MAE and accuracy.
 
         Returns
@@ -403,6 +420,7 @@ class IXPLORE():
         float
             Accuracy of the model predictions.
         """
+        assert self.embedding is not None, "Embedding must be initialized before evaluating."
         predictions = pd.DataFrame(self.predict(self.embedding), 
                                    index=self.users, 
                                    columns=self.items)

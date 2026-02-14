@@ -1,15 +1,25 @@
+from __future__ import annotations
+
+from typing import Literal
+
 import numpy as np
 import pandas as pd
 from scipy.stats import norm
+from sklearn.linear_model import LogisticRegression
 
-def sparsen(array, keep_fraction, generator=np.random.default_rng(0)):
+
+def sparsen(
+    df: pd.DataFrame,
+    keep_fraction: float,
+    generator: np.random.Generator = np.random.default_rng(0),
+) -> pd.DataFrame:
     """
-    Randomly set a fraction of the entries in the array to NaN, simulating missing data.
+    Randomly set a fraction of the entries in the DataFrame to NaN, simulating missing data.
 
     Parameters
     ----------
-    array : np.ndarray or pd.DataFrame
-        The input array to be sparsified.
+    df : pd.DataFrame
+        The input DataFrame to be sparsified.
     keep_fraction : float
         The fraction of entries to keep (between 0 and 1).
     generator : np.random.Generator, optional
@@ -18,21 +28,16 @@ def sparsen(array, keep_fraction, generator=np.random.default_rng(0)):
     
     Returns
     -------
-    np.ndarray or pd.DataFrame
-        The sparsified array with NaN values.
+    pd.DataFrame
+        The sparsified DataFrame with NaN values.
     """
-    pandas = isinstance(array, pd.DataFrame)
-    if pandas:
-        index = array.index
-        columns = array.columns
-        array = array.values
-    mask = generator.random(array.shape) < keep_fraction
-    sparse_array = np.where(mask, array, np.nan)
-    if pandas:
-        sparse_array = pd.DataFrame(sparse_array, index=index, columns=columns)
-    return sparse_array
+    values = df.values
+    mask = generator.random(values.shape) < keep_fraction
+    sparse_array = np.where(mask, values, np.nan)
+    return pd.DataFrame(sparse_array, index=df.index, columns=df.columns)
 
-def extract_parameters(model):
+
+def extract_parameters(model: LogisticRegression) -> np.ndarray:
     """
     Extract the parameters from a fitted logistic regression model.
 
@@ -48,8 +53,12 @@ def extract_parameters(model):
     """
     model_params = np.concatenate((model.coef_, model.intercept_.reshape(1, 1)), axis=1)
     return model_params
-    
-def binarize(array, generator=np.random.default_rng(0)):
+
+
+def binarize(
+    array: np.ndarray,
+    generator: np.random.Generator = np.random.default_rng(0),
+) -> np.ndarray:
     """
     Binarize the input array based on random thresholds.
 
@@ -69,7 +78,8 @@ def binarize(array, generator=np.random.default_rng(0)):
     random_matrix = generator.random(array.shape)
     return (random_matrix <= array).astype(int)
 
-def add_ones(array):
+
+def add_ones(array: np.ndarray) -> np.ndarray:
     """
     Add a column of ones to the input array, typically for including an intercept term in linear models.
     
@@ -85,7 +95,11 @@ def add_ones(array):
     """
     return np.hstack((array, np.ones((len(array),1))))
 
-def create_meshgrid(limits, sampling_resolution):
+
+def create_meshgrid(
+    limits: tuple[float, float, float, float],
+    sampling_resolution: int,
+) -> np.ndarray:
     """
     Create a meshgrid of points within the specified limits and sampling resolution.
 
@@ -105,12 +119,13 @@ def create_meshgrid(limits, sampling_resolution):
                             np.linspace(limits[2], limits[3], sampling_resolution))
     return np.c_[xx.ravel(), yy.ravel()]
 
+
 def transformation_matrix(
-    rotation=0.0,
-    scale=(1.0, 1.0),
-    shear=0.0,
-    order=("shear", "rotate", "scale")
-):
+    rotation: float = 0.0,
+    scale: tuple[float, float] = (1.0, 1.0),
+    shear: float = 0.0,
+    order: tuple[Literal["shear", "rotate", "scale"], ...] = ("shear", "rotate", "scale"),
+) -> np.ndarray:
     """
     Apply a 2D linear transformation to points.
 
@@ -141,11 +156,12 @@ def transformation_matrix(
 
     return M
 
+
 def compute_rasch_values(
-        scores: np.array, 
-        num_options : int =5, 
-        variance: float = 0.1
-):
+    scores: np.ndarray,
+    num_options: int = 5,
+    variance: float = 0.1,
+) -> tuple[np.ndarray, np.ndarray]:
     """
     Compute the Rasch model values for a given set of scores.
 

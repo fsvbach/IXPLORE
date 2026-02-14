@@ -6,6 +6,6 @@ logging.basicConfig(
 )
 
 # Package-level logger
-logger = logging.getLogger("ixplore")
+logger: logging.Logger = logging.getLogger("ixplore")
 logger.setLevel(logging.INFO) 
 
