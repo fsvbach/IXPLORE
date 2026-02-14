@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ixplore"
-version = "0.1.2"
+version = "0.1.3"
 description = "Iterative Probabilistic Logistic Regression Embedding"
 authors = [
     {name = "Fynn Bachmann", email = "fynn.bachmann@uzh.ch"}
@@ -30,8 +30,8 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/fybach/ixplore"
-Repository = "https://github.com/fybach/ixplore"
+Homepage = "https://fynnbachmann.com"
+Repository = "https://github.com/fsvbach/ixplore"
 
 [tool.setuptools.packages.find]
 where = ["."]

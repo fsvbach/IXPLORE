@@ -13,3 +13,6 @@ dist/
 
 # macOS
 .DS_Store
+
+# Work in progress
+misc/

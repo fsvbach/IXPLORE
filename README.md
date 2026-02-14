@@ -30,7 +30,7 @@ pip install ixplore
 Or install from source:
 
 ```bash
-git clone https://github.com/fybach/ixplore.git
+git clone https://github.com/fsvbach/ixplore.git
 cd ixplore
 pip install -e .
 ```
@@ -149,10 +149,10 @@ If you use IXPLORE in your research, please cite:
   title        = {IXPLORE: Iterative Probabilistic Logistic Regression Embedding},
   year         = {2026},
   publisher    = {GitHub},
-  url          = {https://github.com/fybach/ixplore}
+  url          = {https://github.com/fsvbach/ixplore}
 }
 ```
 
 Or in text format:
 
-> Bachmann, F. (2026). IXPLORE: Iterative Probabilistic Logistic Regression Embedding. GitHub. https://github.com/fybach/ixplore
+> Bachmann, F. (2026). IXPLORE: Iterative Probabilistic Logistic Regression Embedding. GitHub. https://github.com/fsvbach/ixplore

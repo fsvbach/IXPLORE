@@ -7,7 +7,6 @@ from matplotlib.colors import Colormap, LinearSegmentedColormap
 from matplotlib.figure import Figure, SubFigure
 import matplotlib.pyplot as plt
 import numpy as np
-import numpy.typing as npt
 import pandas as pd
 
 from .logger import logger
@@ -60,7 +59,7 @@ def clean_axis(ax: axes.Axes) -> axes.Axes:
 
 def plot_embedding(
     embedding: pd.DataFrame,
-    colors: npt.ArrayLike | str = "black",
+    colors: np.array | str = 'gray',
     ax: axes.Axes | None = None,
     user: str | None = None,
     highlight: dict[str, Any] | None = None,
@@ -68,6 +67,9 @@ def plot_embedding(
 ) -> axes.Axes:
     if highlight is None:
         highlight = {}
+    if isinstance(colors, str):
+        colors = np.array([colors] * embedding.shape[0])
+
     fig, ax = figure(ax)
 
     scatter_kwargs: dict[str, Any] = {"zorder": 2, "edgecolors": "black", "s": 40, "lw": 0.5}
@@ -76,12 +78,14 @@ def plot_embedding(
                embedding.loc[:, 'y'], 
                c=colors, 
                **scatter_kwargs)
-    
+
     if user is not None:
-        params: dict[str, Any] = {'edgecolor': 'white', 's':7, 'lw':1, 'zorder':5, 'color':"None", 'label':f"User {user}"}
+        params: dict[str, Any] = {'edgecolor': 'white', 's':7, 'color':'None', 'lw':1, 'zorder':5, 'label':f"User {user}"}
         params.update(highlight)
-        color = colors[embedding.index.get_loc(user)]  # type: ignore[index]
-        ax.scatter(embedding.loc[user, 'x'], embedding.loc[user, 'y'], c=color, **scatter_kwargs)
+        # Put the highlighted user in front of all other users
+        color = colors[embedding.index.get_loc(user)]
+        ax.scatter(embedding.loc[user, 'x'], embedding.loc[user, 'y'], color=color, **scatter_kwargs)
+        # Then add the highlight on top of that
         ax.scatter(embedding.loc[user, 'x'], embedding.loc[user, 'y'], **params)
     return ax
 
@@ -146,7 +150,8 @@ def plot_overview(
     xplore: IXPLORE,
     question: str,
     user: str | None = None,
-    colors: npt.ArrayLike | str = 'black',
+    colors: np.array | str = 'gray',
+    cmap: Colormap = plt.colormaps['viridis'],
     figsize: tuple[float, float] = (7, 4),
 ) -> tuple[Figure | SubFigure, tuple[axes.Axes, axes.Axes]]:
     """
@@ -162,7 +167,7 @@ def plot_overview(
         The user for whom to plot the posterior distribution. If None, the posterior plot will be skipped. Default is None.
     colors : array-like or str, optional
         The colors to use for the embedding points. Can be a single color or an array of colors corresponding to each point. Default is 'black'.
-    figsize : tuple, optional
+    cmap : Colormap, optional
         The size of the figure in inches. Default is (7, 4).
     """
     fig, (ax1, ax2) = plt.subplots(1,2, figsize=figsize)
@@ -174,14 +179,15 @@ def plot_overview(
     # Plot posterior for the user if specified
     if user is not None:
         i = xplore.users.get_loc(user)
-        answers = xplore.reactions[i, :]
-        user_answers = pd.Series(answers, index=xplore.items, name=user).dropna()
+        n_answers = xplore.reactions[i, :]
+        user_answers = pd.Series(n_answers, index=xplore.items, name=user).dropna()
         plot_posterior(xplore, user_answers, ax=ax1)
         ax1.set_title(f'Posterior for User {user}')
 
     i = xplore.items.get_loc(question)
+    q_answers = np.array(list(map(cmap, xplore.reactions[:,i].astype(float))))
     plot_likelihood(xplore, question, ax=ax2)
-    plot_embedding(xplore.get_embedding(), colors=xplore.reactions[:,i], s=60,
+    plot_embedding(xplore.get_embedding(), colors=q_answers, s=60,
                    user=user, highlight={'s': 60, 'edgecolor': 'white'},
                    ax=ax2)
     ax2.set_title(f'Likelihood for Question {question}')
