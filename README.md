@@ -42,7 +42,7 @@ import pandas as pd
 from ixplore import IXPLORE
 
 # Load reaction data (users × items matrix, values in {0, 1})
-reactions = pd.read_csv('../data/binary_reactions.csv', index_col=0)
+reactions = pd.read_csv('../data/likert_reactions.csv', index_col=0)
 
 # Initialize and fit the model
 model = IXPLORE(reactions, pca_initialization=True)
@@ -80,9 +80,13 @@ model = IXPLORE(
 
 ```python
 # Load pretrained embedding and model parameters
+pretrained_embedding = pd.read_csv('../data/pretrained_embedding.csv', index_col=0)
+pretrained_models = pd.read_csv('../data/pretrained_models.csv', index_col=0)
+
 model = IXPLORE(
     reactions,
-    pretrained_embedding='../data/pretrained_embedding.csv',
+    pretrained_embedding=pretrained_embedding,
+    pretrained_models=pretrained_models
 )
 ```
 
@@ -95,7 +99,7 @@ from ixplore.visualization import plot_overview
 users = pd.read_csv('../data/synthetic_users.csv', index_col=0)
 
 # Plot user embeddings
-plot_overview(model, question='Q12', user='0', colors=users.color, figsize=(7,2.5))
+_ = plot_overview(model, question='Q12', user='1', colors=users.color, figsize=(7,2.5))
 ```
 
 ### IXPLORE Class
