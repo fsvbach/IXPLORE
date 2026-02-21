@@ -22,8 +22,8 @@ class IXPLORE:
         sampling_resolution: int = 200,
         xlimits: tuple[float, float] = (-1, 1),
         ylimits: tuple[float, float] = (-1, 1),
-        pretrained_models: str = '',
-        pretrained_embedding: str = '',
+        pretrained_models: pd.DataFrame = None,
+        pretrained_embedding: pd.DataFrame = None,
         pca_initialization: bool = True,
         random_state: int = 0,
         transformation: np.ndarray = np.identity(2),
@@ -44,10 +44,10 @@ class IXPLORE:
             The limits of the x-axis of the 2D space.
         ylimits: tuple
             The limits of the y-axis of the 2D space.
-        pretrained_models: str 
-            The path to the pretrained models. If provided, the model parameters will be loaded from this file.
-        pretrained_embedding: str
-            The path to the pretrained embedding. If provided, the user embeddings will be loaded from this file.
+        pretrained_models: pd.DataFrame 
+            The pretrained model parameters. If provided, the model parameters will be loaded from this DataFrame.
+        pretrained_embedding: pd.DataFrame
+            The pretrained user embeddings. If provided, the user embeddings will be loaded from this DataFrame.
         pca_initialization: bool
             Whether to initialize the embedding with PCA. If False, the embedding will be initialized with random values.
         random_state: int
@@ -62,6 +62,7 @@ class IXPLORE:
         self.items = reactions.columns.astype(str)
         self.number_of_users = len(self.users) # N
         self.number_of_items = len(self.items) # K
+        self.parameters = ['beta1', 'beta2', 'alpha']
         logger.info(f"Number of users for model: {self.number_of_users}")
         logger.info(f"Number of items: {self.number_of_items}")
         logger.info(f"Number of missing values: {np.isnan(self.reactions).sum()} ({np.isnan(self.reactions).mean()*100:.2f}%)")
@@ -89,7 +90,7 @@ class IXPLORE:
 
         ### Initialize embedding and models
         self.transformation = transformation
-        if pretrained_embedding:
+        if pretrained_embedding is not None:
             self.load_embedding(pretrained_embedding)
             logger.info("Used pretrained embedding.")
         elif pca_initialization:
@@ -103,7 +104,7 @@ class IXPLORE:
             self.normalize_embedding()
             logger.info("Initialized embedding with random values.")
 
-        if pretrained_models:
+        if pretrained_models is not None:
             self.load_models(pretrained_models)
             logger.info("Used pretrained model parameters.")
         else:
@@ -118,21 +119,20 @@ class IXPLORE:
         self.prior = multivariate_normal(prior_mean, prior_cov)                 # scipy obj
         self.prior_X = self.prior.pdf(self.X) / self.prior.pdf(self.X).sum()    # (grid_size*grid_size,)
 
-    def load_embedding(self, path: str) -> None:
-        """Load pretrained user embeddings from a CSV file."""
-        dataframe = pd.read_csv(path, index_col=0)
-        self.embedding = dataframe.values
-        assert dataframe.index.astype(str).equals(self.users), "User indices in the pretrained embedding do not match the user indices in the data."
-        assert dataframe.columns.tolist() == ['x', 'y'], "Columns in the pretrained embedding must be ['x', 'y']."
-        logger.info(f"Pretrained embedding loaded from {path}")
+    def load_embedding(self, embedding: pd.DataFrame) -> None:
+        """Load pretrained user embeddings from a DataFrame."""
+        assert embedding.index.astype(str).equals(self.users), "User indices in the pretrained embedding do not match the user indices in the data."
+        assert embedding.columns.tolist() == ['x', 'y'], "Columns in the pretrained embedding must be ['x', 'y']."
+        self.embedding = embedding.values
+        logger.info(f"Pretrained embedding was given.")
 
-    def load_models(self, path: str) -> None:
-        """Load pretrained model parameters from a CSV file."""
-        self.item_parameters = pd.read_csv(path, index_col=0).rename(index=str)
-        assert self.item_parameters.shape[0] == self.number_of_items, "Number of items in the pretrained model parameters does not match the number of items in the data."
-        assert self.item_parameters.shape[1] == 3, "Number of columns in the pretrained model parameters does not match the expected number of columns for the XPLORE model."
+    def load_models(self, parameters: pd.DataFrame) -> None:
+        """Load pretrained model parameters."""
+        assert parameters.index.astype(str).equals(self.items), "Items in the pretrained model parameters do not match the items in the data."
+        assert parameters.columns.tolist() == self.parameters, "Columns in the pretrained model parameters do not match the expected columns for the XPLORE model."
+        self.item_parameters = parameters.values
         self.likelihood_X = self.predict(self.X)
-        logger.info(f"Pretrained model parameters loaded from {path}")
+        logger.info(f"Pretrained model parameters were given.")
 
     def initialize_with_PCA(self) -> None:
         """Initialize user embeddings using PCA on the reaction data and center them."""
@@ -222,7 +222,7 @@ class IXPLORE:
 
     def get_item_parameters(self) -> pd.DataFrame:
         """Get the current item parameters."""
-        return pd.DataFrame(self.item_parameters, index=self.items, columns=['beta1', 'beta2', 'alpha'])
+        return pd.DataFrame(self.item_parameters, index=self.items, columns=self.parameters)
 
     def _posterior_X(self, answer_values: np.ndarray, answer_index: np.ndarray) -> np.ndarray:
         """Compute posterior distribution over X based on the given answers in numpy format.

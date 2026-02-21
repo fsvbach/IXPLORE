@@ -197,6 +197,6 @@ def plot_overview(
         clean_axis(ax)
 
     mae, acc = xplore.evaluate()
-    logger.info(f'MAE: {mae}, ACC: {acc}')
+    logger.info(f'MAE: {mae:.4f}, ACC: {acc:.4f}')
 
     return fig, (ax1, ax2)
