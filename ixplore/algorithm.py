@@ -124,7 +124,7 @@ class IXPLORE:
         assert embedding.index.astype(str).equals(self.users), "User indices in the pretrained embedding do not match the user indices in the data."
         assert embedding.columns.tolist() == ['x', 'y'], "Columns in the pretrained embedding must be ['x', 'y']."
         self.embedding = embedding.values
-        logger.info(f"Pretrained embedding was given.")
+        logger.debug(f"Pretrained embedding was given.")
 
     def load_models(self, parameters: pd.DataFrame) -> None:
         """Load pretrained model parameters."""
@@ -132,7 +132,7 @@ class IXPLORE:
         assert parameters.columns.tolist() == self.parameters, "Columns in the pretrained model parameters do not match the expected columns for the XPLORE model."
         self.item_parameters = parameters.values
         self.likelihood_X = self.predict(self.X)
-        logger.info(f"Pretrained model parameters were given.")
+        logger.debug(f"Pretrained model parameters were given.")
 
     def initialize_with_PCA(self) -> None:
         """Initialize user embeddings using PCA on the reaction data and center them."""
@@ -140,6 +140,7 @@ class IXPLORE:
         X_imputed = imputer.fit_transform(self.reactions)
         self.embedding = PCA(n_components=2).fit_transform(X_imputed)
         self.normalize_embedding()
+        logger.debug(f"Initialized embedding with PCA.")
 
     def get_embedding(self) -> pd.DataFrame:
         """Get the current user embeddings."""

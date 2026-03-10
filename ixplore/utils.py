@@ -185,7 +185,7 @@ def transformation_matrix(
 def compute_rasch_values(
     scores: np.ndarray,
     num_options: int = 5,
-    variance: float = 0.1,
+    variance: float = 0.2,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Compute the Rasch model values for a given set of scores.
@@ -208,7 +208,7 @@ def compute_rasch_values(
     """
     answer_options = np.linspace(0,1,num_options)
     if num_options == 2:
-        return np.array([scores, 1 - scores]), answer_options
+        return np.array([1 - scores, scores]), answer_options
     else:
         values = np.array([norm.pdf(scores, mu, variance) for mu in answer_options])
         return values / values.sum(axis=0), answer_options
