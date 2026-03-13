@@ -80,8 +80,8 @@ model = IXPLORE(
 
 ```python
 # Load pretrained embedding and model parameters
-pretrained_embedding = pd.read_csv('../data/pretrained_embedding.csv', index_col=0)
-pretrained_models = pd.read_csv('../data/pretrained_models.csv', index_col=0)
+pretrained_embedding = pd.read_csv('../data/pretrained_embedding_likert.csv', index_col=0)
+pretrained_models = pd.read_csv('../data/pretrained_models_likert.csv', index_col=0)
 
 model = IXPLORE(
     reactions,

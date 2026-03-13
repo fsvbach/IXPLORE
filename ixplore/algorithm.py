@@ -205,7 +205,7 @@ class IXPLORE:
             mask = ~np.isnan(self.reactions[:, i])
             train_data   = self.embedding[mask]
             train_labels = self.reactions[mask, i]
-            train_labels = utils.binarize(train_labels, self.generator)
+            train_labels = utils.binarize_reactions(train_labels, self.generator)
             assert len(np.unique(train_labels)) == 2, f"No model fitted for Feature {item}."
             model.fit(train_data, train_labels)
             models[item] = model

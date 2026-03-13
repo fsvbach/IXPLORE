@@ -8,10 +8,10 @@ from scipy.stats import norm
 from sklearn.linear_model import LogisticRegression
 
 
-def sparsen(
+def add_sparsity(
     df: pd.DataFrame,
-    keep_fraction: float,
-    generator: np.random.Generator = np.random.default_rng(0),
+    keep_fraction: float | np.ndarray | list,
+    generator: np.random.Generator = np.random.default_rng(),
 ) -> pd.DataFrame:
     """
     Randomly set a fraction of the entries in the DataFrame to NaN, simulating missing data.
@@ -20,21 +20,67 @@ def sparsen(
     ----------
     df : pd.DataFrame
         The input DataFrame to be sparsified.
-    keep_fraction : float
+    keep_fraction : float or array-like of shape (n_rows,)
         The fraction of entries to keep (between 0 and 1).
+        If array-like, each element sets the keep fraction for the corresponding row.
     generator : np.random.Generator, optional
-        A random number generator for reproducibility.  
-        Default is np.random.default_rng(0).
-    
+        A random number generator for reproducibility.
+        Default is np.random.default_rng().
+
     Returns
     -------
     pd.DataFrame
         The sparsified DataFrame with NaN values.
     """
     values = df.values
-    mask = generator.random(values.shape) < keep_fraction
+    fractions = np.broadcast_to(np.asarray(keep_fraction).reshape(-1, 1), values.shape)
+    mask = generator.random(values.shape) < fractions
     sparse_array = np.where(mask, values, np.nan)
     return pd.DataFrame(sparse_array, index=df.index, columns=df.columns)
+
+
+sparsen = add_sparsity  # backward compatibility
+
+
+def add_noise(
+    df: pd.DataFrame,
+    keep_fraction: float | np.ndarray | list,
+    generator: np.random.Generator = np.random.default_rng(),
+) -> pd.DataFrame:
+    """
+    Randomly flip a fraction of each row's entries to a different valid value.
+    Valid values are inferred per column from the unique values in the DataFrame.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        The input DataFrame.
+    keep_fraction : float or array-like of shape (n_rows,)
+        The fraction of entries to keep unchanged (between 0 and 1).
+        If array-like, each element sets the keep fraction for the corresponding row.
+    generator : np.random.Generator, optional
+        A random number generator for reproducibility.
+        Default is np.random.default_rng().
+
+    Returns
+    -------
+    pd.DataFrame
+        A new DataFrame with noisy values where flipped entries are replaced.
+    """
+    values = df.values
+    fractions = np.broadcast_to(np.asarray(keep_fraction).reshape(-1, 1), values.shape)
+    mask = generator.random(values.shape) < fractions
+    # For each column, sample a random *different* value from that column's uniques
+    replacements = np.empty_like(values)
+    for c in range(values.shape[1]):
+        unique = np.unique(values[:, c])
+        n = len(unique)
+        # Sample indices in [0, n-1), then shift up past the current value's index
+        idx = generator.integers(0, n - 1, size=values.shape[0]) if n > 1 else np.zeros(values.shape[0], dtype=int)
+        current_idx = np.searchsorted(unique, values[:, c])
+        replacements[:, c] = unique[(current_idx + 1 + idx) % n]
+    noisy_array = np.where(mask, values, replacements)
+    return pd.DataFrame(noisy_array, index=df.index, columns=df.columns)
 
 
 def scale_reactions(
@@ -80,7 +126,7 @@ def extract_parameters(model: LogisticRegression) -> np.ndarray:
     return model_params
 
 
-def binarize(
+def binarize_reactions(
     array: np.ndarray,
     generator: np.random.Generator = np.random.default_rng(0),
 ) -> np.ndarray:
