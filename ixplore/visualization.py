@@ -133,8 +133,8 @@ def plot_posterior(
     zz = Z.reshape(xx.shape)
 
     # Plot heatmap of probability
+    contour = ax.contourf(xx, yy, zz, alpha=0.8, cmap=cmap, zorder=1)
     if add_bar:
-        contour = ax.contourf(xx, yy, zz, alpha=0.8, cmap=cmap, zorder=1)
         cbar = plt.colorbar(contour, ax=ax)
         cbar.set_label('Probability')
         cbar.ax.ticklabel_format(style="sci", axis="y", scilimits=(0,0))
