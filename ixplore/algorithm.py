@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Literal
 
 from sklearn.decomposition import PCA
-from sklearn.linear_model import LogisticRegression
 from sklearn.impute import SimpleImputer
 from scipy.stats import multivariate_normal
 from scipy.special import expit
@@ -11,6 +10,7 @@ import pandas as pd
 import numpy as np
 
 from .logger import logger
+from .optimization import fit_logistic_newton
 from . import utils
 
 class IXPLORE:
@@ -80,7 +80,6 @@ class IXPLORE:
         logger.info(f"Prior set with mean {self.prior_mean} and covariance {self.prior_cov.flatten()}")
 
         ### Initialize other variables
-        self.models: dict[str, LogisticRegression] = {}
         self.item_parameters: np.ndarray | None = None
         self.likelihood_X: np.ndarray | None = None
         self.posteriors: np.ndarray | None = None
@@ -191,29 +190,51 @@ class IXPLORE:
         assert transformation.shape == (2,2), "Transformation matrix must be of shape (2,2)."
         self.embedding = self.embedding @ transformation.T
         self.normalize_embedding()
-        self.fit_models()
+        self.fit_models(use_posteriors=False)
 
-    def fit_models(self) -> None:
-        """Fit logistic regression models for each item based on current embeddings."""
+    def fit_models(self, use_posteriors: bool = True) -> None:
+        """Fit logistic regression models for each item.
+
+        Parameters
+        ----------
+        use_posteriors : bool
+            If True and posteriors are available, uses aggregated posteriors
+            (per-grid-point weights and effective soft labels) for uncertainty-aware
+            fitting. If False or posteriors are not available, falls back to fitting
+            on point embeddings with soft labels.
+        """
+        if use_posteriors and self.posteriors is not None:
+            self._fit_models_posterior()
+        else:
+            self._fit_models_embedding()
+
+    def _fit_models_embedding(self) -> None:
+        """Fit logistic regression on point embeddings with soft labels."""
         assert self.embedding is not None, "Embedding must be initialized before fitting models."
-        ### TODO: parallelize this
-        models: dict[str, LogisticRegression] = {}
-        for item in self.items:
-            model = LogisticRegression(random_state=0)
-            i = self.items.get_loc(item)
-            mask = ~np.isnan(self.reactions[:, i])
-            train_data   = self.embedding[mask]
-            train_labels = self.reactions[mask, i]
-            train_labels = utils.binarize_reactions(train_labels, self.generator)
-            assert len(np.unique(train_labels)) == 2, f"No model fitted for Feature {item}."
-            model.fit(train_data, train_labels)
-            models[item] = model
-        self.models = models
-        self.update_likelihoods()
+        item_parameters = []
+        for k in range(self.number_of_items):
+            mask = ~np.isnan(self.reactions[:, k])
+            train_data = self.embedding[mask]              # (N_k, 2)
+            train_labels = self.reactions[mask, k]         # (N_k,)
+            params = fit_logistic_newton(train_data, train_labels)
+            item_parameters.append(params)
+        self.item_parameters = np.vstack(item_parameters)
+        self.likelihood_X = self.predict(self.X)
 
-    def update_likelihoods(self) -> None:
-        """Update likelihoods on X-grid based on current models."""
-        self.item_parameters = np.vstack([utils.extract_parameters(model) for model in self.models.values()])
+    def _fit_models_posterior(self) -> None:
+        """Fit logistic regression using aggregated posteriors."""
+        X_grid = self.X  # (G, 2)
+        item_parameters = []
+        for k in range(self.number_of_items):
+            mask = ~np.isnan(self.reactions[:, k])
+            posteriors_k = self.posteriors[mask]          # (N_k, G)
+            labels_k = self.reactions[mask, k]            # (N_k,)
+            W_g = posteriors_k.sum(axis=0)                # (G,)
+            A_g = posteriors_k.T @ labels_k               # (G,)
+            y_eff = np.divide(A_g, W_g, out=np.zeros_like(A_g), where=W_g > 0)
+            params = fit_logistic_newton(X_grid, y_eff, sample_weight=W_g)
+            item_parameters.append(params)
+        self.item_parameters = np.vstack(item_parameters)
         self.likelihood_X = self.predict(self.X)
 
     def get_likelihoods(self) -> pd.DataFrame:

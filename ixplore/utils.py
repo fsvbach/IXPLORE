@@ -5,7 +5,6 @@ from typing import Literal
 import numpy as np
 import pandas as pd
 from scipy.stats import norm
-from sklearn.linear_model import LogisticRegression
 
 
 def add_sparsity(
@@ -107,24 +106,6 @@ def scale_reactions(
     """
     scaled = (reactions - np.nanmin(reactions)) / (np.nanmax(reactions) - np.nanmin(reactions))
     return scaled * (max_value - min_value) + min_value
-
-def extract_parameters(model: LogisticRegression) -> np.ndarray:
-    """
-    Extract the parameters from a fitted logistic regression model.
-
-    Parameters
-    ----------
-    model : sklearn.linear_model.LogisticRegression
-        The fitted logistic regression model. Assumes that the model has been fitted with fit_intercept=True.
-
-    Returns
-    -------
-    np.ndarray
-        The extracted parameters from the model.
-    """
-    model_params = np.concatenate((model.coef_, model.intercept_.reshape(1, 1)), axis=1)
-    return model_params
-
 
 def binarize_reactions(
     array: np.ndarray,
