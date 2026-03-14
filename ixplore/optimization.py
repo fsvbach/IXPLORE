@@ -4,6 +4,13 @@ import numpy as np
 from scipy.special import expit
 
 
+def pca_decompose(X: np.ndarray, n_components: int = 2) -> np.ndarray:
+    """Project data onto its top principal components."""
+    X_centered = X - X.mean(axis=0)
+    _, _, Vt = np.linalg.svd(X_centered, full_matrices=False)
+    return X_centered @ Vt[:n_components].T
+
+
 def fit_logistic_newton(
     X: np.ndarray,
     y: np.ndarray,

@@ -68,7 +68,7 @@ model = IXPLORE(
     reactions,
     prior_mean=np.array([0, 0]),                # Prior center
     prior_cov=np.array([[1, 0], [0, 1]]),   # Prior covariance
-    sampling_resolution=200,                    # Grid resolution for posteriors
+    sampling_resolution=100,                    # Grid resolution for posteriors
     xlimits=(-1, 1),                            # X-axis bounds
     ylimits=(-1, 1),                            # Y-axis bounds
     pca_initialization=True,                    # Initialize with PCA
@@ -99,7 +99,7 @@ from ixplore.visualization import plot_overview
 users = pd.read_csv('../data/synthetic_users.csv', index_col=0)
 
 # Plot user embeddings
-_ = plot_overview(model, question='Q12', user='1', colors=users.color, figsize=(7,2.5))
+_ = plot_overview(model, question='Q12', user='1', colors=users.color)
 ```
 
 ### IXPLORE Class
@@ -111,7 +111,7 @@ _ = plot_overview(model, question='Q12', user='1', colors=users.color, figsize=(
 | `reactions` | pd.DataFrame | required | User-item reaction matrix (users as index, items as columns) |
 | `prior_mean` | np.ndarray | [0, 0] | Mean of the prior distribution |
 | `prior_cov` | np.ndarray | [[1, 0], [0, 1]] | Covariance of the prior distribution |
-| `sampling_resolution` | int | 200 | Grid resolution for posterior computation |
+| `sampling_resolution` | int | 100 | Grid resolution for posterior computation |
 | `xlimits` | tuple | (-1, 1) | X-axis limits of the latent space |
 | `ylimits` | tuple | (-1, 1) | Y-axis limits of the latent space |
 | `pca_initialization` | bool | True | Initialize embeddings with PCA |

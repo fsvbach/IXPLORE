@@ -239,3 +239,20 @@ def compute_rasch_values(
     else:
         values = np.array([norm.pdf(scores, mu, variance) for mu in answer_options])
         return values / values.sum(axis=0), answer_options
+    
+def mean_impute(X: np.ndarray) -> np.ndarray:
+    """Replace NaN values with column means."""
+    col_means = np.nanmean(X, axis=0)
+    X_imputed = X.copy()
+    nan_mask = np.isnan(X_imputed)
+    X_imputed[nan_mask] = np.take(col_means, np.where(nan_mask)[1])
+    return X_imputed
+
+
+def normalize_embedding(embedding: np.ndarray, scaling: float = 1.05) -> np.ndarray:
+    """Center and scale the embedding to fit within the defined limits."""
+    assert embedding is not None, "Embedding must be initialized before normalizing."
+    centroid = (embedding.max(axis=0) + embedding.min(axis=0))/2
+    embedding -= centroid
+    max_extent = np.abs(embedding).max(axis=0)*scaling
+    return embedding / max_extent

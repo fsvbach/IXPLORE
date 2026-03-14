@@ -2,15 +2,13 @@ from __future__ import annotations
 
 from typing import Literal
 
-from sklearn.decomposition import PCA
-from sklearn.impute import SimpleImputer
 from scipy.stats import multivariate_normal
 from scipy.special import expit
 import pandas as pd
 import numpy as np
 
 from .logger import logger
-from .optimization import fit_logistic_newton
+from .optimization import fit_logistic_newton, pca_decompose
 from . import utils
 
 class IXPLORE:
@@ -19,7 +17,7 @@ class IXPLORE:
         reactions: pd.DataFrame,
         prior_mean: np.ndarray = np.array([0, 0]),
         prior_cov: np.ndarray = np.array([[1, 0], [0, 1]]),
-        sampling_resolution: int = 200,
+        sampling_resolution: int = 100,
         xlimits: tuple[float, float] = (-1, 1),
         ylimits: tuple[float, float] = (-1, 1),
         pretrained_models: pd.DataFrame = None,
@@ -94,13 +92,11 @@ class IXPLORE:
             logger.info("Used pretrained embedding.")
         elif pca_initialization:
             self.initialize_with_PCA()
-            self.embedding = self.embedding @ transformation.T
-            self.normalize_embedding()
+            self.embedding = utils.normalize_embedding(self.embedding @ transformation.T)
             logger.info("Initialized embedding with PCA.")
         else:
-            self.embedding = self.generator.uniform(-1, 1,(self.number_of_users, 2))    # (N, 2)
-            self.embedding = self.embedding @ transformation.T                          # (N, 2) @ (2, 2) -> (N, 2)
-            self.normalize_embedding()
+            self.embedding = self.generator.uniform(-1, 1,(self.number_of_users, 2))
+            self.embedding = utils.normalize_embedding(self.embedding @ transformation.T)
             logger.info("Initialized embedding with random values.")
 
         if pretrained_models is not None:
@@ -135,23 +131,14 @@ class IXPLORE:
 
     def initialize_with_PCA(self) -> None:
         """Initialize user embeddings using PCA on the reaction data and center them."""
-        imputer = SimpleImputer(strategy='mean')
-        X_imputed = imputer.fit_transform(self.reactions)
-        self.embedding = PCA(n_components=2).fit_transform(X_imputed)
-        self.normalize_embedding()
+        X_imputed = utils.mean_impute(self.reactions)
+        self.embedding = pca_decompose(X_imputed, n_components=2)
+        self.embedding = utils.normalize_embedding(self.embedding)
         logger.debug(f"Initialized embedding with PCA.")
 
     def get_embedding(self) -> pd.DataFrame:
         """Get the current user embeddings."""
         return pd.DataFrame(self.embedding, index=self.users, columns=['x','y'])
-
-    def normalize_embedding(self, scaling: float = 1.05) -> None:
-        """Center and scale the embedding to fit within the defined limits."""
-        assert self.embedding is not None, "Embedding must be initialized before normalizing."
-        centroid = (self.embedding.max(axis=0) + self.embedding.min(axis=0))/2
-        self.embedding -= centroid
-        max_extent = np.abs(self.embedding).max(axis=0)*scaling
-        self.embedding /= max_extent
 
     def iterate(self, n_iterations: int = 10) -> None:
         """Perform a number of iterations of fitting posteriors and models."""
@@ -188,8 +175,7 @@ class IXPLORE:
     def transform_embedding(self, transformation: np.ndarray) -> None:
         """Apply a linear transformation to the current embedding."""
         assert transformation.shape == (2,2), "Transformation matrix must be of shape (2,2)."
-        self.embedding = self.embedding @ transformation.T
-        self.normalize_embedding()
+        self.embedding = utils.normalize_embedding(self.embedding @ transformation.T)
         self.fit_models(use_posteriors=False)
 
     def fit_models(self, use_posteriors: bool = True) -> None:

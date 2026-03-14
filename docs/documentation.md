@@ -79,19 +79,19 @@ A single point estimate for a user's position discards information about how con
 
 ### How it works
 
-IXPLORE evaluates the posterior on a discrete grid (default: 200 x 200 = 40,000 points) covering the latent space using Bayes' rule:
+IXPLORE evaluates the posterior on a discrete grid (default: 100 x 100 = 10,000 points) covering the latent space using Bayes' rule:
 
 **P(position | answers) proportional to P(answers | position) * P(position)**
 
 The components are:
 
-1. **Prior P(position)**: A multivariate Gaussian (default: mean=[0,0], covariance=0.1*I) evaluated at each grid point and normalized. This encodes the belief that users are likely near the center of the space before observing any data.
+1. **Prior P(position)**: A multivariate Gaussian (default: zero mean, unit covariance) evaluated at each grid point and normalized. This encodes the belief that users are likely near the center of the space before observing any data.
 
 2. **Likelihood P(answers | position)**: For each grid point, the model computes how well that position explains the user's observed answers. For a single item with response value `y` and predicted probability `p(x)`, the likelihood contribution is `1 - |y - p(x)|`. The total likelihood is the product across all answered items.
 
-3. **Posterior**: The element-wise product of prior and likelihood, normalized to sum to 1. The result is a probability distribution over the 40,000 grid points.
+3. **Posterior**: The element-wise product of prior and likelihood, normalized to sum to 1. The result is a probability distribution over the 10,000 grid points.
 
-The **MAP estimate** (maximum a posteriori) is extracted as the grid point with the highest posterior probability and used as the user's point embedding.
+The **MAP estimate** (mean a posteriori) is extracted as the grid point with the expectation value of the posterior distribution and used as the user's point embedding.
 
 ### Code example
 
@@ -116,7 +116,7 @@ fig, (ax1, ax2) = plot_overview(model, question='Q15', user='1', colors=users.co
 new_user = pd.Series({'Q15': 0, 'Q1': 1}, name='new_user')
 fig, ax = plot_posterior(model, new_user)
 
-# Access raw posterior values (array of shape (40000,))
+# Access raw posterior values (array of shape (10000,))
 posterior = model.posterior_X(new_user)
 ```
 
@@ -265,7 +265,7 @@ Input: Reaction matrix R (N users x K items), possibly with missing values
 
 [ITERATIVE REFINEMENT] (repeat for n iterations)
   1. For each user:
-       - Compute posterior P(x | answers) on 200x200 grid
+       - Compute posterior P(x | answers) on 100x100 grid
        - Extract MAP estimate as new position
   2. Center and scale all positions to [-1, 1]^2
   3. For each item:
