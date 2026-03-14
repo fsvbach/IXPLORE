@@ -7,7 +7,7 @@ from scipy.special import expit
 import pandas as pd
 import numpy as np
 
-from .logger import logger
+from .logger import logger, FitLogger
 from .optimization import fit_logistic_newton, pca_decompose
 from . import utils
 
@@ -92,6 +92,7 @@ class IXPLORE:
         self.posteriors: np.ndarray | None = None
         self.embedding: np.ndarray | None = None
         self.generator = np.random.Generator(np.random.PCG64(seed=random_state))
+        self.fit_logger = FitLogger()
         logger.info(f"Random state set to {random_state}")
 
         ### Initialize embedding and models
@@ -114,6 +115,10 @@ class IXPLORE:
         else:
             self.fit_models()
             logger.info("Fitted model parameters from embedding.")
+
+        mae, acc = self.evaluate()
+        self.fit_logger.log(mae, acc)
+        logger.info(f"Initial MAE: {mae:.4f}, Initial accuracy: {acc:.4f}")
 
     def __str__(self) -> str:
         return 'IXPLORE'
@@ -156,6 +161,7 @@ class IXPLORE:
             self.fit_posteriors()
             self.fit_models()
             mae, acc = self.evaluate()
+            self.fit_logger.log(mae, acc)
             logger.info(f"Fit MAE: {mae:.4f}, Fit accuracy: {acc:.4f}")
 
     def fit_posteriors(self, parallelize: bool = False) -> None:
