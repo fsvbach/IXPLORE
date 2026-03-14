@@ -192,7 +192,7 @@ def create_meshgrid(
 
 
 def transformation_matrix(
-    rotation: float = 0.0,
+    rotate: float = 0.0,
     scale: tuple[float, float] = (1.0, 1.0),
     shear: float = 0.0,
     order: tuple[Literal["shear", "rotate", "scale"], ...] = ("shear", "rotate", "scale"),
@@ -202,7 +202,7 @@ def transformation_matrix(
 
     Parameters
     ----------
-    rotation : float
+    rotate : float
         Rotation angle in degree (counterclockwise).
     scale : tuple of (sx, sy)
         Scaling factors along x and y axes.
@@ -215,8 +215,8 @@ def transformation_matrix(
     -------
     matrix : np.ndarray, shape (2, 2)
     """
-    R = np.array([[np.cos(np.radians(rotation)), -np.sin(np.radians(rotation))],
-                    [np.sin(np.radians(rotation)),  np.cos(np.radians(rotation))]])
+    R = np.array([[np.cos(np.radians(rotate)), -np.sin(np.radians(rotate))],
+                    [np.sin(np.radians(rotate)),  np.cos(np.radians(rotate))]])
     S = np.diag(scale)
     Sh = np.array([[1, shear],
                     [0, 1]])

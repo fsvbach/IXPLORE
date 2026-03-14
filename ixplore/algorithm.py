@@ -357,8 +357,8 @@ class IXPLORE:
         np.array
             The predicted coordinates in 2D space of shape (number_of_users, 2).
         """
-        maxidxs = np.argmax(posteriors.reshape(-1,self.sampling_resolution*self.sampling_resolution), axis=1)
-        return self.X[maxidxs]
+        p = posteriors.reshape(-1, self.sampling_resolution * self.sampling_resolution)
+        return p @ self.X
 
     def embed_new_user(self, answers: pd.Series) -> np.ndarray:
         """Embed a single user with given answers.
