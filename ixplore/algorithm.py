@@ -18,7 +18,7 @@ class IXPLORE:
         self,
         reactions: pd.DataFrame,
         prior_mean: np.ndarray = np.array([0, 0]),
-        prior_cov: np.ndarray = np.array([[.1, 0], [0, .1]]),
+        prior_cov: np.ndarray = np.array([[1, 0], [0, 1]]),
         sampling_resolution: int = 200,
         xlimits: tuple[float, float] = (-1, 1),
         ylimits: tuple[float, float] = (-1, 1),
@@ -159,7 +159,6 @@ class IXPLORE:
         for i in range(n_iterations):
             logger.info(f"Iteration {i+1}/{n_iterations}")
             self.fit_posteriors()
-            self.normalize_embedding()
             self.fit_models()
             mae, acc = self.evaluate()
             logger.info(f"Fit MAE: {mae:.4f}, Fit accuracy: {acc:.4f}")

@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from .algorithm import IXPLORE
 
 plt.rcParams.update({
-    "figure.figsize": (5, 5),
+    "figure.figsize": (7, 2.5),
     "figure.dpi": 300,
     "axes.labelsize": 7, 
     "font.size": 7,
@@ -50,8 +50,10 @@ def figure(ax: axes.Axes | None = None) -> tuple[Figure | SubFigure, axes.Axes]:
         return ax.figure, ax
 
 
-def clean_axis(ax: axes.Axes) -> axes.Axes:
+def clean_axis(ax: axes.Axes, limits: tuple[float, float] = (-1, 1)) -> axes.Axes:
     ax.set(aspect='equal',
+           xlim=limits,
+           ylim=limits,
            xticks=[],
            yticks=[])
     return ax
@@ -152,7 +154,7 @@ def plot_overview(
     user: str | None = None,
     colors: np.ndarray | str = 'gray',
     cmap: Colormap = plt.colormaps['viridis'],
-    figsize: tuple[float, float] = (7, 4),
+    figsize: tuple[float, float] = (7, 2.5),
 ) -> tuple[Figure | SubFigure, tuple[axes.Axes, axes.Axes]]:
     """
     Plot an overview of the posterior distribution for a user and the likelihood for a question, along with the embedding.
