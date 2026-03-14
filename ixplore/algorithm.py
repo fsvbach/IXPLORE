@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Callable, Literal
 
 from scipy.stats import multivariate_normal
 from scipy.special import expit
@@ -25,6 +25,8 @@ class IXPLORE:
         pca_initialization: bool = True,
         random_state: int = 0,
         transformation: np.ndarray = np.identity(2),
+        feature_transform: Callable[[np.ndarray], np.ndarray] | None = None,
+        regularization: float = 1e-6,
     ) -> None:
         """Initialize the IXPLORE model.
 
@@ -54,13 +56,16 @@ class IXPLORE:
             A 2x2 transformation matrix to apply to the embedding. Default is the identity matrix
         """
 
+        ### Feature transform and regularization
+        self.feature_transform = feature_transform if feature_transform is not None else lambda X: X
+        self.regularization = regularization
+
         ### Store data as numpy arrays
         self.reactions = utils.scale_reactions(reactions.values)
         self.users = reactions.index.astype(str)
         self.items = reactions.columns.astype(str)
         self.number_of_users = len(self.users) # N
         self.number_of_items = len(self.items) # K
-        self.parameters = ['beta1', 'beta2', 'alpha']
         logger.info(f"Number of users for model: {self.number_of_users}")
         logger.info(f"Number of items: {self.number_of_items}")
         logger.info(f"Number of missing values: {np.isnan(self.reactions).sum()} ({np.isnan(self.reactions).mean()*100:.2f}%)")
@@ -68,8 +73,12 @@ class IXPLORE:
         ### Create grid
         self.sampling_resolution = sampling_resolution
         self.limits = (xlimits[0], xlimits[1], ylimits[0], ylimits[1])
-        self.X = utils.create_meshgrid(self.limits, self.sampling_resolution) 
+        self.X = utils.create_meshgrid(self.limits, self.sampling_resolution)
+        self.X_transformed = self.feature_transform(self.X)
+        self.n_features = self.X_transformed.shape[1]
+        self.parameters = [f'beta{i+1}' for i in range(self.n_features)] + ['alpha']
         logger.info(f"Grid created with resolution {self.sampling_resolution}x{self.sampling_resolution}, total {self.X.shape[0]} points")
+        logger.info(f"Feature dimensions: {self.n_features} (from 2D input)")
 
         ### Set prior
         self.prior_mean = prior_mean
@@ -200,16 +209,16 @@ class IXPLORE:
         item_parameters = []
         for k in range(self.number_of_items):
             mask = ~np.isnan(self.reactions[:, k])
-            train_data = self.embedding[mask]              # (N_k, 2)
-            train_labels = self.reactions[mask, k]         # (N_k,)
-            params = fit_logistic_newton(train_data, train_labels)
+            train_data = self.feature_transform(self.embedding[mask])  # (N_k, D)
+            train_labels = self.reactions[mask, k]                     # (N_k,)
+            params = fit_logistic_newton(train_data, train_labels, regularization=self.regularization)
             item_parameters.append(params)
         self.item_parameters = np.vstack(item_parameters)
         self.likelihood_X = self.predict(self.X)
 
     def _fit_models_posterior(self) -> None:
         """Fit logistic regression using aggregated posteriors."""
-        X_grid = self.X  # (G, 2)
+        X_grid = self.X_transformed  # (G, D)
         item_parameters = []
         for k in range(self.number_of_items):
             mask = ~np.isnan(self.reactions[:, k])
@@ -218,7 +227,7 @@ class IXPLORE:
             W_g = posteriors_k.sum(axis=0)                # (G,)
             A_g = posteriors_k.T @ labels_k               # (G,)
             y_eff = np.divide(A_g, W_g, out=np.zeros_like(A_g), where=W_g > 0)
-            params = fit_logistic_newton(X_grid, y_eff, sample_weight=W_g)
+            params = fit_logistic_newton(X_grid, y_eff, sample_weight=W_g, regularization=self.regularization)
             item_parameters.append(params)
         self.item_parameters = np.vstack(item_parameters)
         self.likelihood_X = self.predict(self.X)
@@ -251,9 +260,12 @@ class IXPLORE:
         answer_index = answer_index[mask]
         assert self.likelihood_X is not None, "Likelihoods must be computed before computing posterior."
         likelihood = self.likelihood_X[:, answer_index]
-        posterior = np.prod(1 - np.abs(answer_values.reshape(-1) - likelihood), axis=1)
-        posterior = posterior * self.prior_X
-        return posterior/ posterior.sum()
+        # Work in log-space to avoid underflow when many items are multiplied
+        log_likelihood = np.sum(np.log(1 - np.abs(answer_values.reshape(-1) - likelihood) + 1e-300), axis=1)
+        log_posterior = log_likelihood + np.log(self.prior_X + 1e-300)
+        log_posterior -= log_posterior.max()  # shift for numerical stability
+        posterior = np.exp(log_posterior)
+        return posterior / posterior.sum()
 
     def posterior_X(self, answers: pd.Series) -> np.ndarray:
         """Compute the posterior distribution over X based on the given answers in pandas format.
@@ -346,7 +358,7 @@ class IXPLORE:
         if not len(params):
             return np.array([])
         assert self.item_parameters is not None, "Item parameters must be fitted before predicting."
-        params = utils.add_ones(params.reshape(-1,2))
+        params = utils.add_ones(self.feature_transform(params.reshape(-1, 2)))
         return_value = expit(params@self.item_parameters[index,:].T)
         return return_value
 
