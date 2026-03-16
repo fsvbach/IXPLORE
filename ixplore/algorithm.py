@@ -2,21 +2,20 @@ from __future__ import annotations
 
 from typing import Callable, Literal
 
-from scipy.stats import multivariate_normal
 from scipy.special import expit
 import pandas as pd
 import numpy as np
 
 from .logger import logger, FitLogger
 from .optimization import fit_logistic_newton, pca_decompose
+from .prior import set_gaussian_prior
 from . import utils
 
 class IXPLORE:
     def __init__(
         self,
         reactions: pd.DataFrame,
-        prior_mean: np.ndarray = np.array([0, 0]),
-        prior_cov: np.ndarray = np.array([[1, 0], [0, 1]]),
+        prior_variance: float = 1.0,
         sampling_resolution: int = 100,
         xlimits: tuple[float, float] = (-1, 1),
         ylimits: tuple[float, float] = (-1, 1),
@@ -34,10 +33,8 @@ class IXPLORE:
         ----------
         reactions: pd.DataFrame
             The user-item reaction matrix with users as index and items as columns. Can contain missing values (NaN).
-        prior_mean: np.ndarray
-            The mean of the prior distribution over the 2D space.
-        prior_cov: np.ndarray
-            The covariance of the prior distribution over the 2D space. Must be a 2x2 matrix.
+        prior_variance: float
+            The diagonal entry of the Gaussian prior covariance matrix. Default is 1.0.
         sampling_resolution: int
             The resolution of the grid over the 2D space.
         xlimits: tuple
@@ -81,10 +78,9 @@ class IXPLORE:
         logger.info(f"Feature dimensions: {self.n_features} (from 2D input)")
 
         ### Set prior
-        self.prior_mean = prior_mean
-        self.prior_cov = prior_cov
-        self.set_prior(prior_mean, prior_cov) 
-        logger.info(f"Prior set with mean {self.prior_mean} and covariance {self.prior_cov.flatten()}")
+        self.prior_variance = prior_variance
+        self.prior_X = set_gaussian_prior(self.X, prior_variance)
+        logger.info(f"Gaussian prior set with covariance diagonal entry {self.prior_variance}")
 
         ### Initialize other variables
         self.item_parameters: np.ndarray | None = None
@@ -122,11 +118,6 @@ class IXPLORE:
 
     def __str__(self) -> str:
         return 'IXPLORE'
-
-    def set_prior(self, prior_mean: np.ndarray, prior_cov: np.ndarray) -> None:
-        """Set the prior distribution over the 2D space."""
-        self.prior = multivariate_normal(prior_mean, prior_cov)                 # scipy obj
-        self.prior_X = self.prior.pdf(self.X) / self.prior.pdf(self.X).sum()    # (grid_size*grid_size,)
 
     def load_embedding(self, embedding: pd.DataFrame) -> None:
         """Load pretrained user embeddings from a DataFrame."""
@@ -268,7 +259,7 @@ class IXPLORE:
         likelihood = self.likelihood_X[:, answer_index]
         # Work in log-space to avoid underflow when many items are multiplied
         log_likelihood = np.sum(np.log(1 - np.abs(answer_values.reshape(-1) - likelihood) + 1e-300), axis=1)
-        log_posterior = log_likelihood + np.log(self.prior_X + 1e-300)
+        log_posterior = log_likelihood + np.log(self.prior_X + 1e-600)
         log_posterior -= log_posterior.max()  # shift for numerical stability
         posterior = np.exp(log_posterior)
         return posterior / posterior.sum()

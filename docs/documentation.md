@@ -125,13 +125,11 @@ posterior = model.posterior_X(new_user)
 The prior strength controls the trade-off between data and regularization. A tighter prior (smaller covariance) pulls positions toward the center more strongly; a wider prior lets the data dominate:
 
 ```python
-import numpy as np
-
 # Wider prior: less regularization, posteriors follow data more closely
-model.set_prior(prior_mean=np.zeros(2), prior_cov=np.eye(2) * 0.2)
+model = IXPLORE(reactions, prior_variance=1.0)
 
 # Tighter prior: stronger regularization, useful for sparse data
-model.set_prior(prior_mean=np.zeros(2), prior_cov=np.eye(2) * 0.05)
+model = IXPLORE(reactions, prior_variance=0.1)
 ```
 
 ### Notebook
