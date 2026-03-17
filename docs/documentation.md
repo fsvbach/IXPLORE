@@ -234,11 +234,7 @@ new_user_answers = pd.Series({'Q1': 0, 'Q15': 1, 'Q30': 0}, name='new_user')
 position = model.embed_new_user(new_user_answers)
 print(f"New user position: x={position[0]:.3f}, y={position[1]:.3f}")
 
-# --- Predict all answers (including answered ones) ---
-all_predictions = model.predict_all_answers(new_user_answers)
-print(all_predictions.head())
-
-# --- Impute only the missing answers, keeping observed values ---
+# --- Impute missing answers, keeping observed values ---
 imputed = model.impute_remaining_answers(new_user_answers)
 print(imputed.head())
 # Q1, Q15, Q30 retain their original values; all others are filled with predictions

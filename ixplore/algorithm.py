@@ -397,27 +397,12 @@ class IXPLORE:
         """
         return self.posteriors2coordinates(self.posterior_X(answers))[0]
 
-    def predict_all_answers(self, answers: pd.Series) -> pd.Series:
-        """Predict answers to all items for a single user with given answers.
-
-        Parameters
-        ----------
-        answers: pd.Series
-            The given answers with index as item names and values as answers.
-
-        Returns
-        -------
-        pd.Series
-            The predicted answers with index as item names and values as answers.
-        """
-        P_X_Yi  = self.posterior_X(answers).reshape(-1,1) 
-        P_Yn1_X = self.likelihood_X
-        P_XYn1_Yi = P_Yn1_X * P_X_Yi                                        # (grid_size*grid_size, K)
-        P_Yn1_Yi  = P_XYn1_Yi.sum(axis=0)                                   # (K,)
-        return pd.Series(P_Yn1_Yi, name=answers.name, index=self.items)
-
     def impute_remaining_answers(self, answers: pd.Series) -> pd.Series:
         """Impute answers to all items for a user with given answers.
+
+        Uses Bayesian marginalisation to predict P(Y=1 | observed answers) for
+        all items, then fills in only the missing values while keeping observed
+        answers intact.
 
         Parameters
         ----------
@@ -429,8 +414,13 @@ class IXPLORE:
         pd.Series
             The imputed answers with index as item names and values as answers.
         """
+        P_X_Yi  = self.posterior_X(answers).reshape(-1,1)
+        P_Yn1_X = self.likelihood_X
+        P_XYn1_Yi = P_Yn1_X * P_X_Yi                                        # (grid_size*grid_size, K)
+        P_Yn1_Yi  = P_XYn1_Yi.sum(axis=0)                                   # (K,)
+        predictions = pd.Series(P_Yn1_Yi, name=answers.name, index=self.items)
         answers = pd.Series(index=self.items, dtype=float).fillna(answers)
-        return answers.fillna(self.predict_all_answers(answers))
+        return answers.fillna(predictions)
 
     def evaluate(self) -> tuple[float, float]:
         """Evaluate model fit on training data using MAE and accuracy.

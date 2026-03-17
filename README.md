@@ -55,8 +55,8 @@ parameters = model.get_item_parameters()  # Item parameters (K × 3)
 new_user_answers = pd.Series({'Q1': 0.8, 'Q2': 0.2, 'Q3': 0.6}, name='new_user')
 position = model.embed_new_user(new_user_answers)
 
-# Predict all answers for a user
-predicted = model.predict_all_answers(new_user_answers)
+# Impute all answers for a user
+predicted = model.impute_remaining_answers(new_user_answers)
 ```
 
 ### Custom Configuration
@@ -125,7 +125,6 @@ _ = plot_overview(model, question='Q12', user='1', colors=users.color)
 | `get_embedding()` | Return current user embeddings as DataFrame |
 | `get_item_parameters()` | Return item model parameters |
 | `embed_new_user(answers)` | Embed a new user given their answers |
-| `predict_all_answers(answers)` | Predict answers for all items given partial answers |
 | `impute_remaining_answers(answers)` | Impute missing answers for a user |
 | `evaluate()` | Return MAE and accuracy on training data |
 
