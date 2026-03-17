@@ -9,6 +9,7 @@ import numpy as np
 from .logger import logger, FitLogger
 from .optimization import fit_logistic_newton, pca_decompose
 from .prior import set_gaussian_prior
+from .likelihood import heuristic_log_likelihood
 from . import utils
 
 class IXPLORE:
@@ -24,8 +25,8 @@ class IXPLORE:
         pca_initialization: bool = True,
         random_state: int = 0,
         transformation: np.ndarray = np.identity(2),
-        feature_transform: Callable[[np.ndarray], np.ndarray] | None = None,
-        regularization: float = 1e-6,
+        kernel: Callable[[np.ndarray], np.ndarray] | None = None,
+        lr_regularization: float = 1e-6,
     ) -> None:
         """Initialize the IXPLORE model.
 
@@ -50,12 +51,18 @@ class IXPLORE:
         random_state: int
             The random state for reproducibility. 
         transformation: np.ndarray
-            A 2x2 transformation matrix to apply to the embedding. Default is the identity matrix
+            A 2x2 transformation matrix to apply to the embedding. Default is the identity matrix.
+        kernel: callable, optional
+            A feature transform function mapping (N, 2) arrays to (N, D) arrays. If None, the identity
+            function is used (no feature engineering). Can be used for e.g. polynomial or RFF features.
+        lr_regularization: float
+            L2 regularization strength for logistic regression. Default is 1e-6.
         """
 
         ### Feature transform and regularization
-        self.feature_transform = feature_transform if feature_transform is not None else lambda X: X
-        self.regularization = regularization
+        self.kernel = kernel if kernel is not None else lambda X: X
+        self.lr_regularization = lr_regularization
+        self.log_likelihood_fn = heuristic_log_likelihood
 
         ### Store data as numpy arrays
         self.reactions = utils.scale_reactions(reactions.values)
@@ -71,7 +78,7 @@ class IXPLORE:
         self.sampling_resolution = sampling_resolution
         self.limits = (xlimits[0], xlimits[1], ylimits[0], ylimits[1])
         self.X = utils.create_meshgrid(self.limits, self.sampling_resolution)
-        self.X_transformed = self.feature_transform(self.X)
+        self.X_transformed = self.kernel(self.X)
         self.n_features = self.X_transformed.shape[1]
         self.parameters = [f'beta{i+1}' for i in range(self.n_features)] + ['alpha']
         logger.info(f"Grid created with resolution {self.sampling_resolution}x{self.sampling_resolution}, total {self.X.shape[0]} points")
@@ -206,9 +213,9 @@ class IXPLORE:
         item_parameters = []
         for k in range(self.number_of_items):
             mask = ~np.isnan(self.reactions[:, k])
-            train_data = self.feature_transform(self.embedding[mask])  # (N_k, D)
+            train_data = self.kernel(self.embedding[mask])  # (N_k, D)
             train_labels = self.reactions[mask, k]                     # (N_k,)
-            params = fit_logistic_newton(train_data, train_labels, regularization=self.regularization)
+            params = fit_logistic_newton(train_data, train_labels, regularization=self.lr_regularization)
             item_parameters.append(params)
         self.item_parameters = np.vstack(item_parameters)
         self.likelihood_X = self.predict(self.X)
@@ -224,7 +231,7 @@ class IXPLORE:
             W_g = posteriors_k.sum(axis=0)                # (G,)
             A_g = posteriors_k.T @ labels_k               # (G,)
             y_eff = np.divide(A_g, W_g, out=np.zeros_like(A_g), where=W_g > 0)
-            params = fit_logistic_newton(X_grid, y_eff, sample_weight=W_g, regularization=self.regularization)
+            params = fit_logistic_newton(X_grid, y_eff, sample_weight=W_g, regularization=self.lr_regularization)
             item_parameters.append(params)
         self.item_parameters = np.vstack(item_parameters)
         self.likelihood_X = self.predict(self.X)
@@ -258,7 +265,7 @@ class IXPLORE:
         assert self.likelihood_X is not None, "Likelihoods must be computed before computing posterior."
         likelihood = self.likelihood_X[:, answer_index]
         # Work in log-space to avoid underflow when many items are multiplied
-        log_likelihood = np.sum(np.log(1 - np.abs(answer_values.reshape(-1) - likelihood) + 1e-300), axis=1)
+        log_likelihood = self.log_likelihood_fn(answer_values.reshape(-1), likelihood)
         log_posterior = log_likelihood + np.log(self.prior_X + 1e-600)
         log_posterior -= log_posterior.max()  # shift for numerical stability
         posterior = np.exp(log_posterior)
@@ -335,19 +342,19 @@ class IXPLORE:
         params: np.ndarray,
         items: list[str] | pd.Index | None = None,
     ) -> np.ndarray:
-        """Compute predictions for given positions outside the X-grid.
+        """Compute predictions for given 2D positions. Applies the kernel transform internally.
 
         Parameters
         ----------
         params: np.array
-            The positions to predict of shape (N, 2) where N is the number of positions to predict.
+            The 2D positions to predict of shape (N, 2) where N is the number of positions.
         items: list, optional
             The items to predict. If None, predict all items. Default is None.
 
         Returns
         -------
         np.array
-            The predicted probabilities of shape (N, len(queries)).
+            The predicted probabilities of shape (N, len(items)).
         """
         if items is None:
             items = self.items
@@ -355,7 +362,7 @@ class IXPLORE:
         if not len(params):
             return np.array([])
         assert self.item_parameters is not None, "Item parameters must be fitted before predicting."
-        params = utils.add_ones(self.feature_transform(params.reshape(-1, 2)))
+        params = utils.add_ones(self.kernel(params.reshape(-1, 2)))
         return_value = expit(params@self.item_parameters[index,:].T)
         return return_value
 
