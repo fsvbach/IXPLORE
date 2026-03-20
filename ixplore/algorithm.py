@@ -119,9 +119,9 @@ class IXPLORE:
             self.fit_models()
             logger.info("Fitted model parameters from embedding.")
 
-        mae, acc = self.evaluate()
-        self.fit_logger.log(mae, acc)
-        logger.info(f"Initial MAE: {mae:.4f}, Initial accuracy: {acc:.4f}")
+        mae, acc, boundary = self.evaluate()
+        self.fit_logger.log(mae, acc, boundary)
+        logger.info(f"Initial MAE: {mae:.4f}, Initial accuracy: {acc:.4f}, Boundary fraction: {boundary:.4f}")
 
     def __str__(self) -> str:
         return 'IXPLORE'
@@ -158,9 +158,9 @@ class IXPLORE:
             logger.info(f"Iteration {i+1}/{n_iterations}")
             self.fit_posteriors()
             self.fit_models()
-            mae, acc = self.evaluate()
-            self.fit_logger.log(mae, acc)
-            logger.info(f"Fit MAE: {mae:.4f}, Fit accuracy: {acc:.4f}")
+            mae, acc, boundary = self.evaluate()
+            self.fit_logger.log(mae, acc, boundary)
+            logger.info(f"Fit MAE: {mae:.4f}, Fit accuracy: {acc:.4f}, Boundary fraction: {boundary:.4f}")
 
     def fit_posteriors(self, parallelize: bool = False) -> None:
         """Compute posteriors on X-grid for every user in train set (self.reactions)."""
@@ -411,8 +411,8 @@ class IXPLORE:
         answers = pd.Series(index=self.items, dtype=float).fillna(answers)
         return answers.fillna(predictions)
 
-    def evaluate(self) -> tuple[float, float]:
-        """Evaluate model fit on training data using MAE and accuracy.
+    def evaluate(self) -> tuple[float, float, float]:
+        """Evaluate model fit on training data using MAE, accuracy, and boundary fraction.
 
         Returns
         -------
@@ -420,11 +420,21 @@ class IXPLORE:
             Mean absolute error of the model predictions.
         float
             Accuracy of the model predictions.
+        float
+            Fraction of predictions near the decision boundary (within 0.05 of 0.5).
         """
         assert self.embedding is not None, "Embedding must be initialized before evaluating."
-        predictions = pd.DataFrame(self.predict(self.embedding), 
-                                   index=self.users, 
+        predictions = pd.DataFrame(self.predict(self.embedding),
+                                   index=self.users,
                                    columns=self.items)
         fit_accuracy = 1 - np.abs(self.reactions.round() - predictions.round()).mean().mean()
         fit_mae = np.mean(np.abs(self.reactions - predictions))
-        return fit_mae, fit_accuracy
+        xmin, xmax, ymin, ymax = self.limits
+        near_border = (
+            (self.embedding[:, 0] - xmin < 0.05) |
+            (xmax - self.embedding[:, 0] < 0.05) |
+            (self.embedding[:, 1] - ymin < 0.05) |
+            (ymax - self.embedding[:, 1] < 0.05)
+        )
+        boundary_fraction = near_border.mean()
+        return fit_mae, fit_accuracy, boundary_fraction

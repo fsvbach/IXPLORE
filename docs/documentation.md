@@ -171,8 +171,8 @@ model = IXPLORE(reactions, pca_initialization=True, random_state=17)
 model.iterate(n_iterations=5)
 
 # Check fit quality
-mae, accuracy = model.evaluate()
-print(f"MAE: {mae:.4f}, Accuracy: {accuracy:.4f}")
+mae, accuracy, boundary = model.evaluate()
+print(f"MAE: {mae:.4f}, Accuracy: {accuracy:.4f}, Boundary: {boundary:.4f}")
 
 # You can also run the steps manually for fine-grained control
 model.fit_posteriors()       # Step 1: update user positions from posteriors

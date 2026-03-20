@@ -198,7 +198,7 @@ def plot_overview(
     for ax in (ax1, ax2):
         clean_axis(ax)
 
-    mae, acc = xplore.evaluate()
-    logger.info(f'MAE: {mae:.4f}, ACC: {acc:.4f}')
+    mae, acc, boundary = xplore.evaluate()
+    logger.info(f'MAE: {mae:.4f}, ACC: {acc:.4f}, Border: {boundary:.4f}')
 
     return fig, (ax1, ax2)
