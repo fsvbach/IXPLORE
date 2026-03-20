@@ -5,11 +5,12 @@ from __future__ import annotations
 import numpy as np
 
 
-def heuristic_log_likelihood(
+def l1_log_likelihood(
     answers: np.ndarray,
     likelihood: np.ndarray,
+    eps: float = 1e-300,
 ) -> np.ndarray:
-    """Compute log-likelihood using the heuristic linear distance measure.
+    """Compute log-likelihood using the L1-norm distance measure.
 
     L(x) = prod_k [1 - |a_k - p_k(x)|]
 
@@ -19,13 +20,15 @@ def heuristic_log_likelihood(
         Answer values of shape (K,).
     likelihood : np.ndarray
         Predicted probabilities on the grid of shape (G, K).
+    eps : float
+        Clipping bound to avoid log(0).
 
     Returns
     -------
     np.ndarray
         Log-likelihood of shape (G,).
     """
-    return np.sum(np.log(1 - np.abs(answers - likelihood) + 1e-600), axis=1)
+    return np.sum(np.log(1 - np.abs(answers - likelihood) + eps), axis=1)
 
 
 def bce_log_likelihood(

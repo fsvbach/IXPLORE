@@ -8,6 +8,7 @@ def set_gaussian_prior(
     X: np.ndarray,
     prior_variance: float = 1.0,
     prior_mean: np.ndarray = np.array([0, 0]),
+    log: bool = False,
 ) -> np.ndarray:
     """Create a Gaussian prior over the 2D grid.
 
@@ -19,13 +20,17 @@ def set_gaussian_prior(
         The diagonal entry of the covariance matrix. Default is 1.0.
     prior_mean : np.ndarray
         The mean of the prior distribution. Default is [0, 0].
+    log : bool
+        If True, return the log of the prior. Default is False.
 
     Returns
     -------
     np.ndarray
-        The normalized prior distribution of shape (G,).
+        The (log) normalized prior distribution of shape (G,).
     """
     prior_cov = np.eye(2) * prior_variance
     prior = multivariate_normal(prior_mean, prior_cov)
+    if log:
+        return prior.logpdf(X)
     prior_X = prior.pdf(X)
     return prior_X / prior_X.sum()

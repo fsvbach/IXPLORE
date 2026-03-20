@@ -8,8 +8,8 @@ import numpy as np
 
 from .logger import logger, FitLogger
 from .optimization import fit_logistic_newton, pca_decompose
+from .likelihood import l1_log_likelihood
 from .prior import set_gaussian_prior
-from .likelihood import heuristic_log_likelihood
 from . import utils
 
 class IXPLORE:
@@ -62,7 +62,7 @@ class IXPLORE:
         ### Feature transform and regularization
         self.kernel = kernel if kernel is not None else lambda X: X
         self.lr_regularization = lr_regularization
-        self.log_likelihood_fn = heuristic_log_likelihood
+        self.log_likelihood_fn = l1_log_likelihood
 
         ### Store data as numpy arrays
         self.reactions = utils.scale_reactions(reactions.values)
@@ -86,7 +86,7 @@ class IXPLORE:
 
         ### Set prior
         self.prior_variance = prior_variance
-        self.prior_X = set_gaussian_prior(self.X, prior_variance)
+        self.log_prior_X = set_gaussian_prior(self.X, prior_variance, log=True)
         logger.info(f"Gaussian prior set with covariance diagonal entry {self.prior_variance}")
 
         ### Initialize other variables
@@ -174,16 +174,11 @@ class IXPLORE:
             answers_indices = np.where(mask)[0]
             posteriors.append(self._posterior_X(answers_values, answers_indices))
         self.posteriors = np.array(posteriors)
-        self.update_embedding()
+        self.embedding = self.posteriors2coordinates(self.posteriors)
 
     def get_posteriors(self) -> pd.DataFrame:
         """Get the current posteriors on X-grid for every user in train set (self.reactions)."""
         return pd.DataFrame(self.posteriors, index=self.users)
-
-    def update_embedding(self) -> None:
-        """Update user embeddings based on current posteriors."""
-        assert self.posteriors is not None, "Posteriors must be computed before updating embedding."
-        self.embedding = self.posteriors2coordinates(self.posteriors)
 
     def transform_embedding(self, transformation: np.ndarray) -> None:
         """Apply a linear transformation to the current embedding."""
@@ -203,13 +198,14 @@ class IXPLORE:
             on point embeddings with soft labels.
         """
         if use_posteriors and self.posteriors is not None:
-            self._fit_models_posterior()
+            item_parameters = self._fit_models_posterior()
         else:
-            self._fit_models_embedding()
+            item_parameters = self._fit_models_embedding()
+        self.item_parameters = np.vstack(item_parameters)
+        self.likelihood_X = self.predict(self.X)
 
     def _fit_models_embedding(self) -> None:
         """Fit logistic regression on point embeddings with soft labels."""
-        assert self.embedding is not None, "Embedding must be initialized before fitting models."
         item_parameters = []
         for k in range(self.number_of_items):
             mask = ~np.isnan(self.reactions[:, k])
@@ -217,12 +213,10 @@ class IXPLORE:
             train_labels = self.reactions[mask, k]                     # (N_k,)
             params = fit_logistic_newton(train_data, train_labels, regularization=self.lr_regularization)
             item_parameters.append(params)
-        self.item_parameters = np.vstack(item_parameters)
-        self.likelihood_X = self.predict(self.X)
+        return item_parameters
 
     def _fit_models_posterior(self) -> None:
         """Fit logistic regression using aggregated posteriors."""
-        X_grid = self.X_transformed  # (G, D)
         item_parameters = []
         for k in range(self.number_of_items):
             mask = ~np.isnan(self.reactions[:, k])
@@ -231,14 +225,9 @@ class IXPLORE:
             W_g = posteriors_k.sum(axis=0)                # (G,)
             A_g = posteriors_k.T @ labels_k               # (G,)
             y_eff = np.divide(A_g, W_g, out=np.zeros_like(A_g), where=W_g > 0)
-            params = fit_logistic_newton(X_grid, y_eff, sample_weight=W_g, regularization=self.lr_regularization)
+            params = fit_logistic_newton(self.X_transformed, y_eff, sample_weight=W_g, regularization=self.lr_regularization)
             item_parameters.append(params)
-        self.item_parameters = np.vstack(item_parameters)
-        self.likelihood_X = self.predict(self.X)
-
-    def get_likelihoods(self) -> pd.DataFrame:
-        """Get the current likelihoods on X-grid for every item."""
-        return pd.DataFrame(self.likelihood_X, columns=self.items)
+        return item_parameters
 
     def get_item_parameters(self) -> pd.DataFrame:
         """Get the current item parameters."""
@@ -266,7 +255,7 @@ class IXPLORE:
         likelihood = self.likelihood_X[:, answer_index]
         # Work in log-space to avoid underflow when many items are multiplied
         log_likelihood = self.log_likelihood_fn(answer_values.reshape(-1), likelihood)
-        log_posterior = log_likelihood + np.log(self.prior_X + 1e-600)
+        log_posterior = log_likelihood + self.log_prior_X
         log_posterior -= log_posterior.max()  # shift for numerical stability
         posterior = np.exp(log_posterior)
         return posterior / posterior.sum()
