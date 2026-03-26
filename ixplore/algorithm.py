@@ -152,12 +152,12 @@ class IXPLORE:
         """Get the current user embeddings."""
         return pd.DataFrame(self.embedding, index=self.users, columns=['x','y'])
 
-    def iterate(self, n_iterations: int = 10) -> None:
+    def iterate(self, n_iterations: int = 10, use_posteriors: bool = False, parallelize: bool = False) -> None:
         """Perform a number of iterations of fitting posteriors and models."""
         for i in range(n_iterations):
             logger.info(f"Iteration {i+1}/{n_iterations}")
-            self.fit_posteriors()
-            self.fit_models()
+            self.fit_posteriors(parallelize=parallelize)
+            self.fit_models(use_posteriors=use_posteriors)
             mae, acc, boundary = self.evaluate()
             self.fit_logger.log(mae, acc, boundary)
             logger.info(f"Fit MAE: {mae:.4f}, Fit accuracy: {acc:.4f}, Boundary fraction: {boundary:.4f}")
@@ -186,7 +186,7 @@ class IXPLORE:
         self.embedding = utils.normalize_embedding(self.embedding @ transformation.T)
         self.fit_models(use_posteriors=False)
 
-    def fit_models(self, use_posteriors: bool = True) -> None:
+    def fit_models(self, use_posteriors: bool = False) -> None:
         """Fit logistic regression models for each item.
 
         Parameters
@@ -411,8 +411,13 @@ class IXPLORE:
         answers = pd.Series(index=self.items, dtype=float).fillna(answers)
         return answers.fillna(predictions)
 
-    def evaluate(self) -> tuple[float, float, float]:
+    def evaluate(self, boundary_threshold: float = 0.05) -> tuple[float, float, float]:
         """Evaluate model fit on training data using MAE, accuracy, and boundary fraction.
+
+        Parameters
+        ----------
+        boundary_threshold: float
+            Fraction of the grid range within which a user is considered near the boundary. Default is 0.05 (5%).
 
         Returns
         -------
@@ -421,7 +426,7 @@ class IXPLORE:
         float
             Accuracy of the model predictions.
         float
-            Fraction of predictions near the decision boundary (within 0.05 of 0.5).
+            Fraction of users near the grid boundary.
         """
         assert self.embedding is not None, "Embedding must be initialized before evaluating."
         predictions = pd.DataFrame(self.predict(self.embedding),
@@ -430,11 +435,13 @@ class IXPLORE:
         fit_accuracy = 1 - np.abs(self.reactions.round() - predictions.round()).mean().mean()
         fit_mae = np.mean(np.abs(self.reactions - predictions))
         xmin, xmax, ymin, ymax = self.limits
+        x_margin = (xmax - xmin) * boundary_threshold
+        y_margin = (ymax - ymin) * boundary_threshold
         near_border = (
-            (self.embedding[:, 0] - xmin < 0.05) |
-            (xmax - self.embedding[:, 0] < 0.05) |
-            (self.embedding[:, 1] - ymin < 0.05) |
-            (ymax - self.embedding[:, 1] < 0.05)
+            (self.embedding[:, 0] - xmin < x_margin) |
+            (xmax - self.embedding[:, 0] < x_margin) |
+            (self.embedding[:, 1] - ymin < y_margin) |
+            (ymax - self.embedding[:, 1] < y_margin)
         )
         boundary_fraction = near_border.mean()
         return fit_mae, fit_accuracy, boundary_fraction
