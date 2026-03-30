@@ -63,6 +63,7 @@ class IXPLORE:
         self.kernel = kernel if kernel is not None else lambda X: X
         self.lr_regularization = lr_regularization
         self.log_likelihood_fn = l1_log_likelihood
+        self.scaled_likelihood = False
 
         ### Store data as numpy arrays
         self.reactions = utils.scale_reactions(reactions.values)
@@ -233,7 +234,7 @@ class IXPLORE:
         """Get the current item parameters."""
         return pd.DataFrame(self.item_parameters, index=self.items, columns=self.parameters)
 
-    def _posterior_X(self, answer_values: np.ndarray, answer_index: np.ndarray) -> np.ndarray:
+    def _posterior_X(self, answer_values: np.ndarray, answer_index: np.ndarray, weight_values: np.ndarray = None) -> np.ndarray:
         """Compute posterior distribution over X based on the given answers in numpy format.
 
         Parameters
@@ -251,22 +252,29 @@ class IXPLORE:
         mask = ~np.isnan(answer_values.astype(float))
         answer_values = answer_values[mask]
         answer_index = answer_index[mask]
+        if weight_values is None:
+            weight_values = np.ones_like(answer_index)
+        assert answer_values.shape == weight_values.shape, "Lenght of weights must match length of answers."
+        if self.scaled_likelihood:
+            weight_values *= self.number_of_items / weight_values.sum()
+        logger.debug(f"Weighing likelihood with {weight_values:.2f}")
         assert self.likelihood_X is not None, "Likelihoods must be computed before computing posterior."
         likelihood = self.likelihood_X[:, answer_index]
         # Work in log-space to avoid underflow when many items are multiplied
-        log_likelihood = self.log_likelihood_fn(answer_values.reshape(-1), likelihood)
+        log_likelihood = self.log_likelihood_fn(answer_values.reshape(-1), likelihood, weights=weight_values)
         log_posterior = log_likelihood + self.log_prior_X
         log_posterior -= log_posterior.max()  # shift for numerical stability
         posterior = np.exp(log_posterior)
         return posterior / posterior.sum()
 
-    def posterior_X(self, answers: pd.Series) -> np.ndarray:
+    def posterior_X(self, answers: pd.Series, weights: pd.Series = None) -> np.ndarray:
         """Compute the posterior distribution over X based on the given answers in pandas format.
 
         Parameters
         ----------
         answers: pd.Series
             The given answers with index as item names and values as answers.
+        weights: pd.Series
 
         Returns
         -------
@@ -274,9 +282,11 @@ class IXPLORE:
             The normalized posterior distribution of shape (sampling_resolution*sampling_resolution,)
         """
         answer_values = answers.dropna().values
+        if weights is not None:
+            weight_values = weights.dropna().values
         answer_indices = self.items.get_indexer(answers.dropna().index)
-        logger.debug("Answer values: %s, Answer indices: %s", answer_values, answer_indices)
-        return self._posterior_X(answer_values, answer_indices)
+        logger.debug("Answer values: %s, Answer indices: %s", answer_values, answer_indices, weight_values)
+        return self._posterior_X(answer_values, answer_indices, weights)
 
     def sample_pseudo_answers(
         self,

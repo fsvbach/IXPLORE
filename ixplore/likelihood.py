@@ -8,7 +8,9 @@ import numpy as np
 def l1_log_likelihood(
     answers: np.ndarray,
     likelihood: np.ndarray,
-    eps: float = 1e-300,
+    weights: np.ndarray,
+    eps_l: float = 1e-300,
+    **kwargs
 ) -> np.ndarray:
     """Compute log-likelihood using the L1-norm distance measure.
 
@@ -28,13 +30,14 @@ def l1_log_likelihood(
     np.ndarray
         Log-likelihood of shape (G,).
     """
-    return np.sum(np.log(1 - np.abs(answers - likelihood) + eps), axis=1)
+    return np.sum(np.log(1 - np.abs(answers - likelihood) + eps_l)*weights, axis=1)
 
 
 def bce_log_likelihood(
     answers: np.ndarray,
     likelihood: np.ndarray,
-    eps: float = 1e-15,
+    eps_p: float = 1e-15,
+    **kwargs
 ) -> np.ndarray:
     """Compute log-likelihood using the Bernoulli cross-entropy.
 
@@ -54,5 +57,5 @@ def bce_log_likelihood(
     np.ndarray
         Log-likelihood of shape (G,).
     """
-    p = np.clip(likelihood, eps, 1 - eps)
+    p = np.clip(likelihood, eps_p, 1 - eps_p)
     return np.sum(answers * np.log(p) + (1 - answers) * np.log(1 - p), axis=1)
