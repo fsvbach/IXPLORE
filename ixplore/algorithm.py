@@ -207,23 +207,23 @@ class IXPLORE:
         self.item_parameters = np.vstack(item_parameters)
         self.likelihood_X = self.predict(self.X)
 
-    def _fit_models_embedding(self) -> None:
+    def _fit_models_embedding(self) -> list[np.ndarray]:
         """Fit logistic regression on point embeddings with soft labels."""
         item_parameters = []
         for k in range(self.number_of_items):
             mask = ~np.isnan(self.reactions[:, k])
-            train_data = self.kernel(self.embedding[mask])  # (N_k, D)
+            train_data = self.kernel(self.embedding[mask])  # type: ignore[index]  # (N_k, D)
             train_labels = self.reactions[mask, k]                     # (N_k,)
             params = fit_logistic_newton(train_data, train_labels, regularization=self.lr_regularization)
             item_parameters.append(params)
         return item_parameters
 
-    def _fit_models_posterior(self) -> None:
+    def _fit_models_posterior(self) -> list[np.ndarray]:
         """Fit logistic regression using aggregated posteriors."""
         item_parameters = []
         for k in range(self.number_of_items):
             mask = ~np.isnan(self.reactions[:, k])
-            posteriors_k = self.posteriors[mask]          # (N_k, G)
+            posteriors_k = self.posteriors[mask]          # type: ignore[index]  # (N_k, G)
             labels_k = self.reactions[mask, k]            # (N_k,)
             W_g = posteriors_k.sum(axis=0)                # (G,)
             A_g = posteriors_k.T @ labels_k               # (G,)
@@ -236,7 +236,7 @@ class IXPLORE:
         """Get the current item parameters."""
         return pd.DataFrame(self.item_parameters, index=self.items, columns=self.parameters)
 
-    def _posterior_X(self, answer_values: np.ndarray, answer_index: np.ndarray, weight_values: np.ndarray = None) -> np.ndarray:
+    def _posterior_X(self, answer_values: np.ndarray, answer_index: np.ndarray, weight_values: np.ndarray | None = None) -> np.ndarray:
         """Compute posterior distribution over X based on the given answers in numpy format.
 
         Parameters
