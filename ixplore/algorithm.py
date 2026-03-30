@@ -64,6 +64,7 @@ class IXPLORE:
         self.lr_regularization = lr_regularization
         self.log_likelihood_fn = l1_log_likelihood
         self.scaled_likelihood = False
+        self.impute_fn = utils.iterative_pca_impute
 
         ### Store data as numpy arrays
         self.reactions = utils.scale_reactions(reactions.values)
@@ -97,6 +98,7 @@ class IXPLORE:
         self.embedding: np.ndarray | None = None
         self.generator = np.random.Generator(np.random.PCG64(seed=random_state))
         self.fit_logger = FitLogger()
+        self.get_point_estimates = self.posteriors2mean
         logger.info(f"Random state set to {random_state}")
 
         ### Initialize embedding and models
@@ -144,7 +146,7 @@ class IXPLORE:
 
     def initialize_with_PCA(self) -> None:
         """Initialize user embeddings using PCA on the reaction data and center them."""
-        X_imputed = utils.mean_impute(self.reactions)
+        X_imputed = self.impute_fn(self.reactions)
         self.embedding = pca_decompose(X_imputed, n_components=2)
         self.embedding = utils.normalize_embedding(self.embedding)
         logger.debug(f"Initialized embedding with PCA.")
@@ -175,7 +177,7 @@ class IXPLORE:
             answers_indices = np.where(mask)[0]
             posteriors.append(self._posterior_X(answers_values, answers_indices))
         self.posteriors = np.array(posteriors)
-        self.embedding = self.posteriors2coordinates(self.posteriors)
+        self.embedding = self.get_point_estimates(self.posteriors)
 
     def get_posteriors(self) -> pd.DataFrame:
         """Get the current posteriors on X-grid for every user in train set (self.reactions)."""
@@ -365,8 +367,8 @@ class IXPLORE:
         return_value = expit(params@self.item_parameters[index,:].T)
         return return_value
 
-    def posteriors2coordinates(self, posteriors: np.ndarray) -> np.ndarray:
-        """Convert posteriors on X-grid to coordinates in 2D space.
+    def posteriors2mean(self, posteriors: np.ndarray) -> np.ndarray:
+        """Convert posteriors to coordinates using the posterior mean (expected value).
 
         Parameters
         ----------
@@ -381,6 +383,22 @@ class IXPLORE:
         p = posteriors.reshape(-1, self.sampling_resolution * self.sampling_resolution)
         return p @ self.X
 
+    def posteriors2map(self, posteriors: np.ndarray) -> np.ndarray:
+        """Convert posteriors to coordinates using the MAP estimate (mode).
+
+        Parameters
+        ----------
+        posteriors: np.array
+            The posteriors on the X-grid of shape (number_of_users, sampling_resolution*sampling_resolution).
+
+        Returns
+        -------
+        np.array
+            The predicted coordinates in 2D space of shape (number_of_users, 2).
+        """
+        p = posteriors.reshape(-1, self.sampling_resolution * self.sampling_resolution)
+        return self.X[np.argmax(p, axis=1)]
+
     def embed_new_user(self, answers: pd.Series) -> np.ndarray:
         """Embed a single user with given answers.
 
@@ -394,7 +412,7 @@ class IXPLORE:
         np.array
             The predicted coordinates in 2D space as (x, y).
         """
-        return self.posteriors2coordinates(self.posterior_X(answers))[0]
+        return self.get_point_estimates(self.posterior_X(answers))[0]
 
     def impute_remaining_answers(self, answers: pd.Series) -> pd.Series:
         """Impute answers to all items for a user with given answers.

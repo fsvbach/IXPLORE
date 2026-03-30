@@ -142,7 +142,7 @@ def plot_posterior(
         cbar.ax.ticklabel_format(style="sci", axis="y", scilimits=(0,0))
 
     # Indicate point estimate
-    x, y = xplore.posteriors2coordinates(Z)[0]
+    x, y = xplore.get_point_estimates(Z)[0]
     ax.scatter(x, y, marker='x', color='black', s=10, label='Optimized Coordinates', zorder=5)
 
     return fig, ax

@@ -22,6 +22,8 @@ def l1_log_likelihood(
         Answer values of shape (K,).
     likelihood : np.ndarray
         Predicted probabilities on the grid of shape (G, K).
+    weights : np.ndarray
+        Weights for each question of shape (K,).
     eps : float
         Clipping bound to avoid log(0).
 
@@ -30,7 +32,8 @@ def l1_log_likelihood(
     np.ndarray
         Log-likelihood of shape (G,).
     """
-    return np.sum(np.log(1 - np.abs(answers - likelihood) + eps_l)*weights, axis=1)
+    log_likelihood = np.log(1 - np.abs(answers - likelihood) + eps_l)
+    return np.average(log_likelihood, axis=1, weights=weights)
 
 
 def bce_log_likelihood(

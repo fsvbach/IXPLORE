@@ -249,6 +249,26 @@ def mean_impute(X: np.ndarray) -> np.ndarray:
     return X_imputed
 
 
+def iterative_pca_impute(X: np.ndarray, n_components: int = 2, max_iter: int = 5) -> np.ndarray:
+    """Replace NaN values with iterative PCA reconstruction (Grung & Manne 1998)."""
+    mask = np.isnan(X)
+    if not mask.any():
+        return X.copy()
+
+    col_means = np.nanmean(X, axis=0)
+    X_filled = X.copy()
+    X_filled[mask] = np.take(col_means, np.where(mask)[1])
+
+    for _ in range(max_iter):
+        X_centered = X_filled - X_filled.mean(axis=0)
+        _, _, Vt = np.linalg.svd(X_centered, full_matrices=False)
+        scores = X_centered @ Vt[:n_components].T
+        recon = scores @ Vt[:n_components] + X_filled.mean(axis=0)
+        X_filled[mask] = recon[mask]
+
+    return X_filled
+
+
 def normalize_embedding(embedding: np.ndarray, scaling: float = 1.05) -> np.ndarray:
     """Center and scale the embedding to fit within the defined limits."""
     assert embedding is not None, "Embedding must be initialized before normalizing."
