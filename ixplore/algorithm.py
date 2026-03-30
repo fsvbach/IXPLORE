@@ -26,7 +26,6 @@ class IXPLORE:
         random_state: int = 0,
         transformation: np.ndarray = np.identity(2),
         kernel: Callable[[np.ndarray], np.ndarray] | None = None,
-        lr_regularization: float = 1e-6,
     ) -> None:
         """Initialize the IXPLORE model.
 
@@ -55,13 +54,8 @@ class IXPLORE:
         kernel: callable, optional
             A feature transform function mapping (N, 2) arrays to (N, D) arrays. If None, the identity
             function is used (no feature engineering). Can be used for e.g. polynomial or RFF features.
-        lr_regularization: float
-            L2 regularization strength for logistic regression. Default is 1e-6.
         """
-
-        ### Feature transform and regularization
         self.kernel = kernel if kernel is not None else lambda X: X
-        self.lr_regularization = lr_regularization
         self.log_likelihood_fn = l1_log_likelihood
         self.scaled_likelihood = False
         self.impute_fn = utils.iterative_pca_impute
@@ -214,7 +208,7 @@ class IXPLORE:
             mask = ~np.isnan(self.reactions[:, k])
             train_data = self.kernel(self.embedding[mask])  # type: ignore[index]  # (N_k, D)
             train_labels = self.reactions[mask, k]                     # (N_k,)
-            params = fit_logistic_newton(train_data, train_labels, regularization=self.lr_regularization)
+            params = fit_logistic_newton(train_data, train_labels, regularization=1e-8)
             item_parameters.append(params)
         return item_parameters
 
@@ -228,7 +222,7 @@ class IXPLORE:
             W_g = posteriors_k.sum(axis=0)                # (G,)
             A_g = posteriors_k.T @ labels_k               # (G,)
             y_eff = np.divide(A_g, W_g, out=np.zeros_like(A_g), where=W_g > 0)
-            params = fit_logistic_newton(self.X_transformed, y_eff, sample_weight=W_g, regularization=self.lr_regularization)
+            params = fit_logistic_newton(self.X_transformed, y_eff, sample_weight=W_g, regularization=1e-8)
             item_parameters.append(params)
         return item_parameters
 
@@ -255,15 +249,16 @@ class IXPLORE:
         answer_values = answer_values[mask]
         answer_index = answer_index[mask]
         if weight_values is None:
-            weight_values = np.ones_like(answer_index)
+            weight_values = np.ones_like(answer_index, dtype=float)
         assert answer_values.shape == weight_values.shape, "Lenght of weights must match length of answers."
         assert self.likelihood_X is not None, "Likelihoods must be computed before computing posterior."
         likelihood = self.likelihood_X[:, answer_index]
+        # Scale weights to sum to n_items if scaled_likelihood, otherwise keep as-is
+        if self.scaled_likelihood and weight_values.sum() > 0:
+            weight_values *= self.number_of_items / weight_values.sum()
         # Work in log-space to avoid underflow when many items are multiplied
         log_likelihood = self.log_likelihood_fn(answer_values.reshape(-1), likelihood, weights=weight_values)
-        factor = self.number_of_items if self.scaled_likelihood else len(weight_values)
-        logger.debug("Weighing likelihood with factor%s", factor)
-        log_posterior = factor * log_likelihood + self.log_prior_X
+        log_posterior = log_likelihood + self.log_prior_X
         log_posterior -= log_posterior.max()  # shift for numerical stability
         posterior = np.exp(log_posterior)
         return posterior / posterior.sum()

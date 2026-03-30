@@ -33,7 +33,7 @@ def l1_log_likelihood(
         Log-likelihood of shape (G,).
     """
     log_likelihood = np.log(1 - np.abs(answers - likelihood) + eps_l)
-    return np.average(log_likelihood, axis=1, weights=weights)
+    return np.sum(log_likelihood * weights, axis=1)
 
 
 def bce_log_likelihood(
