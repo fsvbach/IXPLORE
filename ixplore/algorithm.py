@@ -153,7 +153,7 @@ class IXPLORE:
 
     def get_embedding(self) -> pd.DataFrame:
         """Get the current user embeddings."""
-        return pd.DataFrame(self.embedding, index=self.users, columns=['x','y'])
+        return pd.DataFrame(self.embedding.round(3), index=self.users, columns=['x','y'])
 
     def iterate(self, n_iterations: int = 10, use_posteriors: bool = False, parallelize: bool = False) -> None:
         """Perform a number of iterations of fitting posteriors and models."""
@@ -234,7 +234,7 @@ class IXPLORE:
 
     def get_item_parameters(self) -> pd.DataFrame:
         """Get the current item parameters."""
-        return pd.DataFrame(self.item_parameters, index=self.items, columns=self.parameters)
+        return pd.DataFrame(self.item_parameters.round(3), index=self.items, columns=self.parameters)
 
     def _posterior_X(self, answer_values: np.ndarray, answer_index: np.ndarray, weight_values: np.ndarray | None = None) -> np.ndarray:
         """Compute posterior distribution over X based on the given answers in numpy format.
@@ -257,14 +257,13 @@ class IXPLORE:
         if weight_values is None:
             weight_values = np.ones_like(answer_index)
         assert answer_values.shape == weight_values.shape, "Lenght of weights must match length of answers."
-        if self.scaled_likelihood:
-            weight_values *= self.number_of_items / weight_values.sum()
-        logger.debug(f"Weighing likelihood with {weight_values:.2f}")
         assert self.likelihood_X is not None, "Likelihoods must be computed before computing posterior."
         likelihood = self.likelihood_X[:, answer_index]
         # Work in log-space to avoid underflow when many items are multiplied
         log_likelihood = self.log_likelihood_fn(answer_values.reshape(-1), likelihood, weights=weight_values)
-        log_posterior = log_likelihood + self.log_prior_X
+        factor = self.number_of_items if self.scaled_likelihood else len(weight_values)
+        logger.debug("Weighing likelihood with factor%s", factor)
+        log_posterior = factor * log_likelihood + self.log_prior_X
         log_posterior -= log_posterior.max()  # shift for numerical stability
         posterior = np.exp(log_posterior)
         return posterior / posterior.sum()
@@ -285,9 +284,9 @@ class IXPLORE:
         """
         answer_values = answers.dropna().values
         if weights is not None:
-            weight_values = weights.dropna().values
+            weights = weights.dropna().values
         answer_indices = self.items.get_indexer(answers.dropna().index)
-        logger.debug("Answer values: %s, Answer indices: %s", answer_values, answer_indices, weight_values)
+        logger.debug("Answer values: %s, Answer indices: %s", answer_values, answer_indices)
         return self._posterior_X(answer_values, answer_indices, weights)
 
     def sample_pseudo_answers(
