@@ -246,9 +246,15 @@ class IXPLORE:
         P_Yn1_X = self.predictions_X
         P_XYn1_Yi = P_Yn1_X * P_X_Yi                                        # (G, K)
         P_Yn1_Yi  = P_XYn1_Yi.sum(axis=0)                                   # (K,)
-        marginal_predictions = pd.Series(P_Yn1_Yi, name=answers.name, index=self.items)
+        predictions = pd.Series(P_Yn1_Yi, name=answers.name, index=self.items)
         answers = pd.Series(index=self.items, dtype=float).fillna(answers)
-        return answers.fillna(marginal_predictions)
+        return answers.fillna(predictions)
+
+    def predict_all_answers(self, answers: pd.Series) -> pd.Series:
+        """Predict P(Y=1) for every item from the user's embedded position."""
+        position = self.embed_user(answers)
+        predictions = self.predict(position[None, :])[0]
+        return pd.Series(predictions, name=answers.name, index=self.items)
 
     def sample_answers(
         self,

@@ -32,6 +32,7 @@ def l1_log_likelihood(
     np.ndarray
         Log-likelihood of shape (G,).
     """
+    assert np.all((answers >= 0) & (answers <= 1)), "answers must be in [0, 1]"
     log_likelihood = np.log(1 - np.abs(answers - likelihood) + eps_l)
     return np.sum(log_likelihood * weights, axis=1)
 
@@ -60,5 +61,6 @@ def bce_log_likelihood(
     np.ndarray
         Log-likelihood of shape (G,).
     """
+    assert np.all((answers >= 0) & (answers <= 1)), "answers must be in [0, 1]"
     p = np.clip(likelihood, eps_p, 1 - eps_p)
     return np.sum(answers * np.log(p) + (1 - answers) * np.log(1 - p), axis=1)
