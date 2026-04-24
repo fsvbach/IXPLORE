@@ -165,7 +165,7 @@ def create_meshgrid(
     Returns
     -------
     np.ndarray
-        An array of shape (sampling_resolution*sampling_resolution, 2) containing the coordinates of the grid points.
+        An array of shape (G, 2) containing the coordinates of the grid points, where G = sampling_resolution**2.
     """
     axis = np.linspace(limits[0], limits[1], sampling_resolution)
     xx, yy = np.meshgrid(axis, axis)

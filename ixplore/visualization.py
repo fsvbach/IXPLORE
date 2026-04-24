@@ -106,8 +106,8 @@ def plot_likelihood(
     yy = xplore.X[:, 1].reshape(meshgrid_size, meshgrid_size)
 
     # Predict probabilities on the grid
-    assert xplore.likelihood_X is not None, "Likelihoods must be computed before plotting."
-    Z = xplore.likelihood_X[:,xplore.items.get_loc(feature)]
+    assert xplore.predictions_X is not None, "Predictions must be computed before plotting."
+    Z = xplore.predictions_X[:,xplore.items.get_loc(feature)]
     Z = Z.reshape(xx.shape)
 
     # Plot the decision boundary at 50% probability
@@ -133,7 +133,7 @@ def plot_posterior(
     yy = xplore.X[:, 1].reshape(meshgrid_size, meshgrid_size)
 
     # Predict probabilities on the grid
-    Z = xplore.posterior_X(answers)
+    Z = xplore.compute_posterior_X(answers)
     zz = Z.reshape(xx.shape)
 
     # Plot heatmap of probability
@@ -144,7 +144,7 @@ def plot_posterior(
         cbar.ax.ticklabel_format(style="sci", axis="y", scilimits=(0,0))
 
     # Indicate point estimate
-    x, y = xplore.get_point_estimates(Z)[0]
+    x, y = xplore.get_point_estimates(Z, xplore.X)[0]
     ax.scatter(x, y, marker='x', color='black', s=10, label='Optimized Coordinates', zorder=5)
 
     return fig, ax
