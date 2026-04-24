@@ -12,24 +12,14 @@ def add_sparsity(
     keep_fraction: float | np.ndarray | list,
     generator: np.random.Generator = np.random.default_rng(),
 ) -> pd.DataFrame:
-    """
-    Randomly set a fraction of the entries in the DataFrame to NaN, simulating missing data.
+    """Randomly set entries to NaN to simulate missing data.
 
     Parameters
     ----------
-    df : pd.DataFrame
-        The input DataFrame to be sparsified.
-    keep_fraction : float or array-like of shape (n_rows,)
-        The fraction of entries to keep (between 0 and 1).
-        If array-like, each element sets the keep fraction for the corresponding row.
-    generator : np.random.Generator, optional
-        A random number generator for reproducibility.
-        Default is np.random.default_rng().
-
-    Returns
-    -------
-    pd.DataFrame
-        The sparsified DataFrame with NaN values.
+    keep_fraction: float or array-like of shape (n_rows,)
+        Fraction of entries to keep in [0, 1]. If array-like, sets the keep fraction per row.
+    generator: np.random.Generator
+        Random generator for reproducibility.
     """
     values = df.values
     fractions = np.broadcast_to(np.asarray(keep_fraction).reshape(-1, 1), values.shape)
@@ -46,25 +36,14 @@ def add_noise(
     keep_fraction: float | np.ndarray | list,
     generator: np.random.Generator = np.random.default_rng(),
 ) -> pd.DataFrame:
-    """
-    Randomly flip a fraction of each row's entries to a different valid value.
-    Valid values are inferred per column from the unique values in the DataFrame.
+    """Randomly flip entries to a different valid value, inferred per column from unique values.
 
     Parameters
     ----------
-    df : pd.DataFrame
-        The input DataFrame.
-    keep_fraction : float or array-like of shape (n_rows,)
-        The fraction of entries to keep unchanged (between 0 and 1).
-        If array-like, each element sets the keep fraction for the corresponding row.
-    generator : np.random.Generator, optional
-        A random number generator for reproducibility.
-        Default is np.random.default_rng().
-
-    Returns
-    -------
-    pd.DataFrame
-        A new DataFrame with noisy values where flipped entries are replaced.
+    keep_fraction: float or array-like of shape (n_rows,)
+        Fraction of entries to keep unchanged in [0, 1]. If array-like, sets the keep fraction per row.
+    generator: np.random.Generator
+        Random generator for reproducibility.
     """
     values = df.values
     fractions = np.broadcast_to(np.asarray(keep_fraction).reshape(-1, 1), values.shape)
@@ -87,23 +66,7 @@ def scale_reactions(
     min_value: float = 0.0,
     max_value: float = 1.0,
     ) -> np.ndarray:
-    """
-    Scale the reaction values to a specified range.
-
-    Parameters
-    ----------
-    reactions : np.ndarray
-        The input array of reaction values to be scaled.
-    min_value : float, optional
-        The minimum value of the scaled range (default is 0.0).
-    max_value : float, optional
-        The maximum value of the scaled range (default is 1.0). 
-
-    Returns
-    -------
-    np.ndarray
-        The scaled reaction values.
-    """
+    """Scale reactions linearly into [min_value, max_value]."""
     scaled = (reactions - np.nanmin(reactions)) / (np.nanmax(reactions) - np.nanmin(reactions))
     return scaled * (max_value - min_value) + min_value
 
@@ -111,64 +74,35 @@ def binarize_reactions(
     array: np.ndarray,
     generator: np.random.Generator = np.random.default_rng(0),
 ) -> np.ndarray:
-    """
-    Binarize the input array based on random thresholds.
-
-    Parameters
-    ----------
-    array : np.ndarray
-        The input array to be binarized.
-    generator : np.random.Generator, optional
-        A random number generator for reproducibility.  
-        Default is np.random.default_rng(0).
-
-    Returns
-    -------
-    np.ndarray
-        The binarized array.
-    """
+    """Binarize an array by Bernoulli sampling with per-entry probabilities."""
     random_matrix = generator.random(array.shape)
     return (random_matrix <= array).astype(int)
 
 
 def add_ones(array: np.ndarray) -> np.ndarray:
-    """
-    Add a column of ones to the input array, typically for including an intercept term in linear models.
-    
-    Parameters
-    ----------
-    array : np.ndarray
-        The input array to which a column of ones will be added.
-        
-    Returns
-    -------
-    np.ndarray
-        The input array with an additional column of ones.
-    """
+    """Append a column of ones to `array` for an intercept term."""
     return np.hstack((array, np.ones((len(array),1))))
 
 
 def create_meshgrid(
-    limits: tuple[float, float],
+    xlim: tuple[float, float],
+    ylim: tuple[float, float],
     sampling_resolution: int,
 ) -> np.ndarray:
-    """
-    Create a square meshgrid of points within the specified limits and sampling resolution.
+    """Return a (G, 2) meshgrid where G = sampling_resolution**2.
 
     Parameters
     ----------
-    limits : tuple of length 2
-        The (min, max) limits applied to both axes of the square grid.
-    sampling_resolution : int
-        The number of points to sample along each axis.
-
-    Returns
-    -------
-    np.ndarray
-        An array of shape (G, 2) containing the coordinates of the grid points, where G = sampling_resolution**2.
+    xlim: tuple
+        (min, max) limits along the x-axis.
+    ylim: tuple
+        (min, max) limits along the y-axis.
+    sampling_resolution: int
+        Number of points per axis.
     """
-    axis = np.linspace(limits[0], limits[1], sampling_resolution)
-    xx, yy = np.meshgrid(axis, axis)
+    x_axis = np.linspace(xlim[0], xlim[1], sampling_resolution)
+    y_axis = np.linspace(ylim[0], ylim[1], sampling_resolution)
+    xx, yy = np.meshgrid(x_axis, y_axis)
     return np.c_[xx.ravel(), yy.ravel()]
 
 
@@ -178,23 +112,18 @@ def transformation_matrix(
     shear: float = 0.0,
     order: tuple[Literal["shear", "rotate", "scale"], ...] = ("shear", "rotate", "scale"),
 ) -> np.ndarray:
-    """
-    Apply a 2D linear transformation to points.
+    """Build a 2x2 linear transformation from rotation, scaling, and shear.
 
     Parameters
     ----------
-    rotate : float
-        Rotation angle in degree (counterclockwise).
-    scale : tuple of (sx, sy)
-        Scaling factors along x and y axes.
-    shear : float
-        Shear factor in x-direction.
-    order : tuple of str
-        Order of transformations. Each can be 'scale', 'shear', 'rotate'.
-
-    Returns
-    -------
-    matrix : np.ndarray, shape (2, 2)
+    rotate: float
+        Rotation angle in degrees (counterclockwise).
+    scale: tuple
+        Scaling factors (sx, sy).
+    shear: float
+        Shear factor along the x-axis.
+    order: tuple
+        Order in which 'scale', 'shear', and 'rotate' are composed.
     """
     R = np.array([[np.cos(np.radians(rotate)), -np.sin(np.radians(rotate))],
                     [np.sin(np.radians(rotate)),  np.cos(np.radians(rotate))]])
@@ -214,24 +143,19 @@ def compute_rasch_values(
     num_options: int = 5,
     variance: float = 0.2,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """
-    Compute the Rasch model values for a given set of scores.
+    """Compute Rasch probabilities over `num_options` answer options for each score.
 
     Parameters
     ----------
-    scores : np.array
-        The input scores for which to compute the Rasch values.
-    num_options : int, optional
-        The number of answer options (default is 5).
-    variance : float, optional
-        The variance for the normal distribution used in the Rasch model (default is 0.1).
-    
+    num_options: int
+        Number of evenly spaced answer options in [0, 1].
+    variance: float
+        Variance of the normal kernel used to build the Rasch probabilities.
+
     Returns
     -------
-    np.array
-        The computed Rasch values for the input scores.
-    np.array
-        The answer options used in the Rasch model.
+    tuple
+        (probabilities of shape (num_options, len(scores)), answer_options of shape (num_options,)).
     """
     answer_options = np.linspace(0,1,num_options)
     if num_options == 2:
