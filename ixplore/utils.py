@@ -149,16 +149,16 @@ def add_ones(array: np.ndarray) -> np.ndarray:
 
 
 def create_meshgrid(
-    limits: tuple[float, float, float, float],
+    limits: tuple[float, float],
     sampling_resolution: int,
 ) -> np.ndarray:
     """
-    Create a meshgrid of points within the specified limits and sampling resolution.
+    Create a square meshgrid of points within the specified limits and sampling resolution.
 
     Parameters
     ----------
-    limits : list or tuple of length 4
-        The limits of the grid in the format [x_min, x_max, y_min, y_max].
+    limits : tuple of length 2
+        The (min, max) limits applied to both axes of the square grid.
     sampling_resolution : int
         The number of points to sample along each axis.
 
@@ -167,8 +167,8 @@ def create_meshgrid(
     np.ndarray
         An array of shape (sampling_resolution*sampling_resolution, 2) containing the coordinates of the grid points.
     """
-    xx, yy = np.meshgrid(np.linspace(limits[0], limits[1], sampling_resolution),
-                            np.linspace(limits[2], limits[3], sampling_resolution))
+    axis = np.linspace(limits[0], limits[1], sampling_resolution)
+    xx, yy = np.meshgrid(axis, axis)
     return np.c_[xx.ravel(), yy.ravel()]
 
 
@@ -271,19 +271,18 @@ def iterative_pca_impute(X: np.ndarray, n_components: int = 2, max_iter: int = 5
 
 def normalize_embedding(
     embedding: np.ndarray,
-    xlimits: tuple[float, float] = (-1.0, 1.0),
-    ylimits: tuple[float, float] = (-1.0, 1.0),
+    limits: tuple[float, float] = (-1.0, 1.0),
     scaling: float = 1.05,
 ) -> np.ndarray:
-    """Center and scale the embedding to fit within the given axis limits.
+    """Center and scale the embedding to fit within the given square limits.
 
-    The embedding is centered on each axis' limit midpoint and scaled so its
-    extreme point sits at ``half_range / scaling`` from the center, leaving a
-    margin of ``(scaling - 1)`` inside the limits.
+    The embedding is centered on the limit midpoint and scaled so its extreme
+    point sits at ``half_range / scaling`` from the center, leaving a margin
+    of ``(scaling - 1)`` inside the limits.
     """
     assert embedding is not None, "Embedding must be initialized before normalizing."
-    limit_center = np.array([(xlimits[0] + xlimits[1]) / 2, (ylimits[0] + ylimits[1]) / 2])
-    limit_half_range = np.array([(xlimits[1] - xlimits[0]) / 2, (ylimits[1] - ylimits[0]) / 2])
+    limit_center = (limits[0] + limits[1]) / 2
+    limit_half_range = (limits[1] - limits[0]) / 2
     centroid = (embedding.max(axis=0) + embedding.min(axis=0)) / 2
     embedding -= centroid
     max_extent = np.abs(embedding).max(axis=0) * scaling

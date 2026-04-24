@@ -68,8 +68,7 @@ model = IXPLORE(
     reactions,
     prior_variance=1.0,                         # Prior regularization
     sampling_resolution=100,                    # Grid resolution for posteriors
-    xlimits=(-1, 1),                            # X-axis bounds
-    ylimits=(-1, 1),                            # Y-axis bounds
+    limits=(-1, 1),                             # Bounds for both axes (square space)
     pca_initialization=True,                    # Initialize with PCA
     random_state=17                             # For reproducibility
 )
@@ -110,8 +109,7 @@ _ = plot_overview(model, question='Q12', user='1', colors=users.color)
 | `reactions` | pd.DataFrame | required | User-item reaction matrix (users as index, items as columns) |
 | `prior_variance` | float | 1.0 | Diagonal entry of the Gaussian prior covariance matrix |
 | `sampling_resolution` | int | 100 | Grid resolution for posterior computation |
-| `xlimits` | tuple | (-1, 1) | X-axis limits of the latent space |
-| `ylimits` | tuple | (-1, 1) | Y-axis limits of the latent space |
+| `limits` | tuple | (-1, 1) | (min, max) limits applied to both axes of the square latent space |
 | `pca_initialization` | bool | True | Initialize embeddings with PCA |
 | `random_state` | int | 0 | Random seed for reproducibility |
 

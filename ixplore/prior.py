@@ -39,11 +39,10 @@ def set_gaussian_prior(
 def set_log_barrier_prior(
     X: np.ndarray,
     alpha: float = 1.0,
-    xlimits: tuple[float, float] = (-1.0, 1.0),
-    ylimits: tuple[float, float] = (-1.0, 1.0),
+    limits: tuple[float, float] = (-1.0, 1.0),
     log: bool = False,
 ) -> np.ndarray:
-    """Create a log-barrier prior over the 2D grid.
+    """Create a log-barrier prior over the square 2D grid.
 
     The penalty is R(x, y) = -alpha * [log(1 - u^2) + log(1 - v^2)], where
     u and v are the grid coordinates rescaled to (-1, 1) using the given
@@ -55,8 +54,8 @@ def set_log_barrier_prior(
         The grid points of shape (G, 2).
     alpha : float
         Barrier strength. Larger values push mass away from the boundary.
-    xlimits, ylimits : tuple[float, float]
-        Grid limits used to rescale X to (-1, 1). Default (-1, 1).
+    limits : tuple[float, float]
+        (min, max) limits applied to both axes, used to rescale X to (-1, 1). Default (-1, 1).
     log : bool
         If True, return the (unnormalized) log-prior. Default False.
 
@@ -66,10 +65,9 @@ def set_log_barrier_prior(
         The (log) prior distribution of shape (G,). In non-log form it is
         normalized to sum to 1; in log form it is the shifted log-prior.
     """
-    xmin, xmax = xlimits
-    ymin, ymax = ylimits
-    u = 2 * (X[:, 0] - xmin) / (xmax - xmin) - 1
-    v = 2 * (X[:, 1] - ymin) / (ymax - ymin) - 1
+    lo, hi = limits
+    u = 2 * (X[:, 0] - lo) / (hi - lo) - 1
+    v = 2 * (X[:, 1] - lo) / (hi - lo) - 1
     interior = (np.abs(u) < 1.0) & (np.abs(v) < 1.0)
     log_prior = np.full(X.shape[0], -np.inf)
     log_prior[interior] = alpha * (

@@ -18,8 +18,7 @@ class IXPLORE:
         reactions: pd.DataFrame,
         prior_variance: float = 1.0,
         sampling_resolution: int = 100,
-        xlimits: tuple[float, float] = (-1, 1),
-        ylimits: tuple[float, float] = (-1, 1),
+        limits: tuple[float, float] = (-1, 1),
         pretrained_models: pd.DataFrame = None,
         pretrained_embedding: pd.DataFrame = None,
         pca_initialization: bool = True,
@@ -37,10 +36,8 @@ class IXPLORE:
             The diagonal entry of the Gaussian prior covariance matrix. Default is 1.0.
         sampling_resolution: int
             The resolution of the grid over the 2D space.
-        xlimits: tuple
-            The limits of the x-axis of the 2D space.
-        ylimits: tuple
-            The limits of the y-axis of the 2D space.
+        limits: tuple
+            The (min, max) limits applied to both axes of the square 2D space.
         pretrained_models: pd.DataFrame 
             The pretrained model parameters. If provided, the model parameters will be loaded from this DataFrame.
         pretrained_embedding: pd.DataFrame
@@ -72,8 +69,8 @@ class IXPLORE:
 
         ### Create grid
         self.sampling_resolution = sampling_resolution
-        self.limits = (xlimits[0], xlimits[1], ylimits[0], ylimits[1])
-        self.X = utils.create_meshgrid(self.limits, self.sampling_resolution)
+        self.limits = limits
+        self.X = utils.create_meshgrid(np.hstack([self.limits, self.limits]), self.sampling_resolution)
         self.X_transformed = self.kernel(self.X)
         self.n_features = self.X_transformed.shape[1]
         self.parameters = [f'beta{i+1}' for i in range(self.n_features)] + ['alpha']
@@ -105,11 +102,7 @@ class IXPLORE:
             self.embedding = self.embedding @ transformation.T
             logger.info("Initialized embedding with PCA.")
         else:
-            self.embedding = self.generator.uniform(
-                low=[xlimits[0], ylimits[0]],
-                high=[xlimits[1], ylimits[1]],
-                size=(self.number_of_users, 2),
-            )
+            self.embedding = self.generator.uniform(limits[0], limits[1], size=(self.number_of_users, 2))
             self.embedding = self.embedding @ transformation.T
             logger.info("Initialized embedding with random values.")
 
@@ -144,11 +137,7 @@ class IXPLORE:
         """Initialize user embeddings using PCA on the reaction data and center them."""
         X_imputed = self.impute_fn(self.reactions)
         self.embedding = pca_decompose(X_imputed, n_components=2)
-        self.embedding = utils.normalize_embedding(
-            self.embedding,
-            xlimits=(self.limits[0], self.limits[1]),
-            ylimits=(self.limits[2], self.limits[3]),
-        )
+        self.embedding = utils.normalize_embedding(self.embedding, limits=self.limits)
         logger.debug(f"Initialized embedding with PCA.")
 
     def get_embedding(self) -> pd.DataFrame:
@@ -202,11 +191,7 @@ class IXPLORE:
     def transform_embedding(self, transformation: np.ndarray) -> None:
         """Apply a linear transformation to the current embedding."""
         assert transformation.shape == (2,2), "Transformation matrix must be of shape (2,2)."
-        self.embedding = utils.normalize_embedding(
-            self.embedding @ transformation.T,
-            xlimits=(self.limits[0], self.limits[1]),
-            ylimits=(self.limits[2], self.limits[3]),
-        )
+        self.embedding = utils.normalize_embedding(self.embedding @ transformation.T, limits=self.limits)
         self.fit_models(use_posteriors=False)
 
     def fit_models(self, use_posteriors: bool = False) -> None:
@@ -506,14 +491,13 @@ class IXPLORE:
                                    columns=self.items)
         fit_accuracy = 1 - np.abs(self.reactions.round() - predictions.round()).mean().mean()
         fit_mae = np.mean(np.abs(self.reactions - predictions))
-        xmin, xmax, ymin, ymax = self.limits
-        x_margin = (xmax - xmin) * boundary_threshold
-        y_margin = (ymax - ymin) * boundary_threshold
+        lo, hi = self.limits
+        margin = (hi - lo) * boundary_threshold
         near_border = (
-            (self.embedding[:, 0] - xmin < x_margin) |
-            (xmax - self.embedding[:, 0] < x_margin) |
-            (self.embedding[:, 1] - ymin < y_margin) |
-            (ymax - self.embedding[:, 1] < y_margin)
+            (self.embedding[:, 0] - lo < margin) |
+            (hi - self.embedding[:, 0] < margin) |
+            (self.embedding[:, 1] - lo < margin) |
+            (hi - self.embedding[:, 1] < margin)
         )
         boundary_fraction = near_border.mean()
         spread = float(np.sqrt(self.embedding[:, 0].std()**2 + self.embedding[:, 1].std()**2))
