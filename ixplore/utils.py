@@ -269,10 +269,22 @@ def iterative_pca_impute(X: np.ndarray, n_components: int = 2, max_iter: int = 5
     return X_filled
 
 
-def normalize_embedding(embedding: np.ndarray, scaling: float = 1.05) -> np.ndarray:
-    """Center and scale the embedding to fit within the defined limits."""
+def normalize_embedding(
+    embedding: np.ndarray,
+    xlimits: tuple[float, float] = (-1.0, 1.0),
+    ylimits: tuple[float, float] = (-1.0, 1.0),
+    scaling: float = 1.05,
+) -> np.ndarray:
+    """Center and scale the embedding to fit within the given axis limits.
+
+    The embedding is centered on each axis' limit midpoint and scaled so its
+    extreme point sits at ``half_range / scaling`` from the center, leaving a
+    margin of ``(scaling - 1)`` inside the limits.
+    """
     assert embedding is not None, "Embedding must be initialized before normalizing."
-    centroid = (embedding.max(axis=0) + embedding.min(axis=0))/2
+    limit_center = np.array([(xlimits[0] + xlimits[1]) / 2, (ylimits[0] + ylimits[1]) / 2])
+    limit_half_range = np.array([(xlimits[1] - xlimits[0]) / 2, (ylimits[1] - ylimits[0]) / 2])
+    centroid = (embedding.max(axis=0) + embedding.min(axis=0)) / 2
     embedding -= centroid
-    max_extent = np.abs(embedding).max(axis=0)*scaling
-    return embedding / max_extent
+    max_extent = np.abs(embedding).max(axis=0) * scaling
+    return embedding / max_extent * limit_half_range + limit_center

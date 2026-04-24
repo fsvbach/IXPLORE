@@ -88,7 +88,7 @@ class IXPLORE:
         ### Initialize other variables
         self.item_parameters: np.ndarray | None = None
         self.likelihood_X: np.ndarray | None = None
-        self.posteriors: np.ndarray | None = None
+        self.log_likelihoods: np.ndarray | None = None
         self.embedding: np.ndarray | None = None
         self.generator = np.random.Generator(np.random.PCG64(seed=random_state))
         self.fit_logger = FitLogger()
@@ -102,11 +102,15 @@ class IXPLORE:
             logger.info("Used pretrained embedding.")
         elif pca_initialization:
             self.initialize_with_PCA()
-            self.embedding = utils.normalize_embedding(self.embedding @ transformation.T)
+            self.embedding = self.embedding @ transformation.T
             logger.info("Initialized embedding with PCA.")
         else:
-            self.embedding = self.generator.uniform(-1, 1,(self.number_of_users, 2))
-            self.embedding = utils.normalize_embedding(self.embedding @ transformation.T)
+            self.embedding = self.generator.uniform(
+                low=[xlimits[0], ylimits[0]],
+                high=[xlimits[1], ylimits[1]],
+                size=(self.number_of_users, 2),
+            )
+            self.embedding = self.embedding @ transformation.T
             logger.info("Initialized embedding with random values.")
 
         if pretrained_models is not None:
@@ -140,7 +144,11 @@ class IXPLORE:
         """Initialize user embeddings using PCA on the reaction data and center them."""
         X_imputed = self.impute_fn(self.reactions)
         self.embedding = pca_decompose(X_imputed, n_components=2)
-        self.embedding = utils.normalize_embedding(self.embedding)
+        self.embedding = utils.normalize_embedding(
+            self.embedding,
+            xlimits=(self.limits[0], self.limits[1]),
+            ylimits=(self.limits[2], self.limits[3]),
+        )
         logger.debug(f"Initialized embedding with PCA.")
 
     def get_embedding(self) -> pd.DataFrame:
@@ -163,27 +171,42 @@ class IXPLORE:
         logger.info(f"{prefix}{body}")
 
     def fit_posteriors(self, parallelize: bool = False) -> None:
-        """Compute posteriors on X-grid for every user in train set (self.reactions)."""
+        """Compute log-likelihoods on X-grid for every user in train set (self.reactions)."""
         ### TODO: parallelize this
-        posteriors = []
+        log_likelihoods = []
         for n in self.users:
             i = self.users.get_loc(n)
             user = self.reactions[i, :]
             mask = ~np.isnan(user)
             answers_values = user[mask]
             answers_indices = np.where(mask)[0]
-            posteriors.append(self._posterior_X(answers_values, answers_indices))
-        self.posteriors = np.array(posteriors)
-        self.embedding = self.get_point_estimates(self.posteriors)
+            log_likelihoods.append(self._log_likelihood(answers_values, answers_indices))
+        self.log_likelihoods = np.array(log_likelihoods)
+        self.embedding = self.get_point_estimates(self._posteriors_from_cache())
+
+    def apply_prior(self, prior_variance: float) -> None:
+        """Re-apply a Gaussian prior with the given variance using cached log-likelihoods.
+
+        Recomputes `self.log_prior_X` and `self.embedding` without redoing the
+        expensive likelihood pass. Requires `fit_posteriors` to have been called.
+        """
+        assert self.log_likelihoods is not None, "fit_posteriors must be called before apply_prior."
+        self.prior_variance = prior_variance
+        self.log_prior_X = set_gaussian_prior(self.X, prior_variance, log=True)
+        self.embedding = self.get_point_estimates(self._posteriors_from_cache())
 
     def get_posteriors(self) -> pd.DataFrame:
         """Get the current posteriors on X-grid for every user in train set (self.reactions)."""
-        return pd.DataFrame(self.posteriors, index=self.users)
+        return pd.DataFrame(self._posteriors_from_cache(), index=self.users)
 
     def transform_embedding(self, transformation: np.ndarray) -> None:
         """Apply a linear transformation to the current embedding."""
         assert transformation.shape == (2,2), "Transformation matrix must be of shape (2,2)."
-        self.embedding = utils.normalize_embedding(self.embedding @ transformation.T)
+        self.embedding = utils.normalize_embedding(
+            self.embedding @ transformation.T,
+            xlimits=(self.limits[0], self.limits[1]),
+            ylimits=(self.limits[2], self.limits[3]),
+        )
         self.fit_models(use_posteriors=False)
 
     def fit_models(self, use_posteriors: bool = False) -> None:
@@ -197,7 +220,7 @@ class IXPLORE:
             fitting. If False or posteriors are not available, falls back to fitting
             on point embeddings with soft labels.
         """
-        if use_posteriors and self.posteriors is not None:
+        if use_posteriors and self.log_likelihoods is not None:
             item_parameters = self._fit_models_posterior()
         else:
             item_parameters = self._fit_models_embedding()
@@ -217,10 +240,11 @@ class IXPLORE:
 
     def _fit_models_posterior(self) -> list[np.ndarray]:
         """Fit logistic regression using aggregated posteriors."""
+        posteriors = self._posteriors_from_cache()
         item_parameters = []
         for k in range(self.number_of_items):
             mask = ~np.isnan(self.reactions[:, k])
-            posteriors_k = self.posteriors[mask]          # type: ignore[index]  # (N_k, G)
+            posteriors_k = posteriors[mask]               # (N_k, G)
             labels_k = self.reactions[mask, k]            # (N_k,)
             W_g = posteriors_k.sum(axis=0)                # (G,)
             A_g = posteriors_k.T @ labels_k               # (G,)
@@ -232,6 +256,40 @@ class IXPLORE:
     def get_item_parameters(self) -> pd.DataFrame:
         """Get the current item parameters."""
         return pd.DataFrame(self.item_parameters.round(3), index=self.items, columns=self.parameters)
+
+    def _log_likelihood(self, answer_values: np.ndarray, answer_index: np.ndarray, weight_values: np.ndarray | None = None) -> np.ndarray:
+        """Compute grid log-likelihood for a single user's answers.
+
+        Returns
+        -------
+        np.array
+            Log-likelihood over the grid, shape (G,).
+        """
+        mask = ~np.isnan(answer_values.astype(float))
+        answer_values = answer_values[mask]
+        answer_index = answer_index[mask]
+        if weight_values is None:
+            weight_values = np.ones_like(answer_index, dtype=float)
+        assert answer_values.shape == weight_values.shape, "Lenght of weights must match length of answers."
+        assert self.likelihood_X is not None, "Likelihoods must be computed before computing posterior."
+        likelihood = self.likelihood_X[:, answer_index]
+        if self.scaled_likelihood and weight_values.sum() > 0:
+            weight_values *= self.number_of_items / weight_values.sum()
+        return self.log_likelihood_fn(answer_values.reshape(-1), likelihood, weights=weight_values)
+
+    def _posteriors_from_cache(self) -> np.ndarray:
+        """Derive all-user posteriors from cached log-likelihoods and current prior.
+
+        Returns
+        -------
+        np.array
+            Normalized posteriors of shape (N, G).
+        """
+        assert self.log_likelihoods is not None, "log_likelihoods must be computed before deriving posteriors."
+        log_posteriors = self.log_likelihoods + self.log_prior_X
+        log_posteriors -= log_posteriors.max(axis=1, keepdims=True)
+        posteriors = np.exp(log_posteriors)
+        return posteriors / posteriors.sum(axis=1, keepdims=True)
 
     def _posterior_X(self, answer_values: np.ndarray, answer_index: np.ndarray, weight_values: np.ndarray | None = None) -> np.ndarray:
         """Compute posterior distribution over X based on the given answers in numpy format.
@@ -248,21 +306,9 @@ class IXPLORE:
         np.array
             The normalized posterior distribution of shape (sampling_resolution*sampling_resolution,)
         """
-        mask = ~np.isnan(answer_values.astype(float))
-        answer_values = answer_values[mask]
-        answer_index = answer_index[mask]
-        if weight_values is None:
-            weight_values = np.ones_like(answer_index, dtype=float)
-        assert answer_values.shape == weight_values.shape, "Lenght of weights must match length of answers."
-        assert self.likelihood_X is not None, "Likelihoods must be computed before computing posterior."
-        likelihood = self.likelihood_X[:, answer_index]
-        # Scale weights to sum to n_items if scaled_likelihood, otherwise keep as-is
-        if self.scaled_likelihood and weight_values.sum() > 0:
-            weight_values *= self.number_of_items / weight_values.sum()
-        # Work in log-space to avoid underflow when many items are multiplied
-        log_likelihood = self.log_likelihood_fn(answer_values.reshape(-1), likelihood, weights=weight_values)
+        log_likelihood = self._log_likelihood(answer_values, answer_index, weight_values)
         log_posterior = log_likelihood + self.log_prior_X
-        log_posterior -= log_posterior.max()  # shift for numerical stability
+        log_posterior -= log_posterior.max()
         posterior = np.exp(log_posterior)
         return posterior / posterior.sum()
 

@@ -97,6 +97,7 @@ def plot_likelihood(
     feature: str,
     cmap: Colormap = colormap,
     ax: axes.Axes | None = None,
+    add_bar: bool = True,
 ) -> tuple[Figure | SubFigure, axes.Axes]:
     fig, ax = figure(ax)
 
@@ -112,8 +113,9 @@ def plot_likelihood(
     # Plot the decision boundary at 50% probability
     ax.contour(xx, yy, Z, levels=[0.5], colors="black", linestyles="--")
     contour = ax.contourf(xx, yy, Z, alpha=0.8, cmap=cmap, levels=np.linspace(0, 1, 11), zorder=1)
-    cbar = plt.colorbar(contour, ax=ax)
-    cbar.set_label('Likelihood')
+    if add_bar:
+        cbar = plt.colorbar(contour, ax=ax)
+        cbar.set_label('Likelihood')
     return fig, ax
 
 
