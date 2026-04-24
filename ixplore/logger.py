@@ -17,15 +17,18 @@ class FitLogger:
     """Records metrics each time iterate() is called."""
     mae: list[float] = field(default_factory=list)
     accuracy: list[float] = field(default_factory=list)
-    boundary_fraction: list[float] = field(default_factory=list)
+    boundary: list[float] = field(default_factory=list)
+    spread: list[float] = field(default_factory=list)
 
-    def log(self, mae: float, accuracy: float, boundary_fraction: float) -> None:
-        self.mae.append(mae)
-        self.accuracy.append(accuracy)
-        self.boundary_fraction.append(boundary_fraction)
+    def log(self, metrics: dict[str, float]) -> None:
+        self.mae.append(metrics['mae'])
+        self.accuracy.append(metrics['accuracy'])
+        self.boundary.append(metrics['boundary'])
+        self.spread.append(metrics['spread'])
 
     def clear(self) -> None:
         self.mae.clear()
         self.accuracy.clear()
-        self.boundary_fraction.clear()
+        self.boundary.clear()
+        self.spread.clear()
 

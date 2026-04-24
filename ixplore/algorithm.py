@@ -115,10 +115,8 @@ class IXPLORE:
         else:
             self.fit_models()
             logger.info("Fitted model parameters from embedding.")
-
-        mae, acc, boundary = self.evaluate()
-        self.fit_logger.log(mae, acc, boundary)
-        logger.info(f"Initial MAE: {mae:.4f}, Initial accuracy: {acc:.4f}, Boundary fraction: {boundary:.4f}")
+            
+        self._log_metrics(prefix="Initial — ")
 
     def __str__(self) -> str:
         return 'IXPLORE'
@@ -155,9 +153,14 @@ class IXPLORE:
             logger.info(f"Iteration {i+1}/{n_iterations}")
             self.fit_posteriors(parallelize=parallelize)
             self.fit_models(use_posteriors=use_posteriors)
-            mae, acc, boundary = self.evaluate()
-            self.fit_logger.log(mae, acc, boundary)
-            logger.info(f"Fit MAE: {mae:.4f}, Fit accuracy: {acc:.4f}, Boundary fraction: {boundary:.4f}")
+            self._log_metrics(prefix=f"Iter {i+1}/{n_iterations} — ")
+
+    def _log_metrics(self, prefix: str = "") -> None:
+        """Evaluate, record to fit_logger, and emit an INFO line."""
+        metrics = self.evaluate()
+        self.fit_logger.log(metrics)
+        body = ", ".join(f"{k}: {v:.4f}" for k, v in metrics.items())
+        logger.info(f"{prefix}{body}")
 
     def fit_posteriors(self, parallelize: bool = False) -> None:
         """Compute posteriors on X-grid for every user in train set (self.reactions)."""
@@ -433,8 +436,8 @@ class IXPLORE:
         answers = pd.Series(index=self.items, dtype=float).fillna(answers)
         return answers.fillna(predictions)
 
-    def evaluate(self, boundary_threshold: float = 0.05) -> tuple[float, float, float]:
-        """Evaluate model fit on training data using MAE, accuracy, and boundary fraction.
+    def evaluate(self, boundary_threshold: float = 0.05) -> dict[str, float]:
+        """Evaluate model fit on training data.
 
         Parameters
         ----------
@@ -443,12 +446,13 @@ class IXPLORE:
 
         Returns
         -------
-        float
-            Mean absolute error of the model predictions.
-        float
-            Accuracy of the model predictions.
-        float
-            Fraction of users near the grid boundary.
+        dict[str, float]
+            Dictionary with keys:
+            - 'mae': Mean absolute error of the model predictions.
+            - 'accuracy': Accuracy of the model predictions.
+            - 'boundary': Fraction of users near the grid boundary.
+            - 'spread': Combined per-axis standard deviation of the embedding,
+              sqrt(std_x^2 + std_y^2).
         """
         assert self.embedding is not None, "Embedding must be initialized before evaluating."
         predictions = pd.DataFrame(self.predict(self.embedding),
@@ -466,4 +470,10 @@ class IXPLORE:
             (ymax - self.embedding[:, 1] < y_margin)
         )
         boundary_fraction = near_border.mean()
-        return fit_mae, fit_accuracy, boundary_fraction
+        spread = float(np.sqrt(self.embedding[:, 0].std()**2 + self.embedding[:, 1].std()**2))
+        return {
+            'mae': float(fit_mae),
+            'accuracy': float(fit_accuracy),
+            'boundary': float(boundary_fraction),
+            'spread': spread,
+        }
