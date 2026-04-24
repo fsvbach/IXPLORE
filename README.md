@@ -41,19 +41,22 @@ pip install -e .
 import pandas as pd
 from ixplore import IXPLORE
 
-# Load reaction data (users × items matrix, values in {0, 1})
+# Load reaction data (users × items matrix, values in {0, 1} or Likert-scale)
 reactions = pd.read_csv('../data/likert_reactions.csv', index_col=0)
 
 # Initialize and fit the model
 model = IXPLORE(reactions, pca_initialization=True)
 
-# Get user embeddings
-embedding  = model.get_embedding()        # User positions (N × 2)
-parameters = model.get_item_parameters()  # Item parameters (K × 3)
+# Refine with a few iterations of joint optimization
+model.iterate(n_iterations=1)
+
+# Get user embeddings and item parameters
+embedding  = model.get_embedding()    # User positions (N × 2) with columns ['x', 'y']
+parameters = model.get_parameters()   # Item parameters (K × 3): ['beta1', 'beta2', 'alpha']
 
 # Embed a new user based on their answers
 new_user_answers = pd.Series({'Q1': 0.8, 'Q2': 0.2, 'Q3': 0.6}, name='new_user')
-position = model.embed_new_user(new_user_answers)
+position = model.embed_user(new_user_answers)
 
 # Impute all answers for a user
 predicted = model.impute_remaining_answers(new_user_answers)
@@ -108,23 +111,33 @@ _ = plot_overview(model, question='Q12', user='1', colors=users.color)
 |-----------|------|---------|-------------|
 | `reactions` | pd.DataFrame | required | User-item reaction matrix (users as index, items as columns) |
 | `prior_variance` | float | 1.0 | Diagonal entry of the Gaussian prior covariance matrix |
-| `sampling_resolution` | int | 100 | Grid resolution for posterior computation |
+| `sampling_resolution` | int | 100 | Grid resolution per axis for posterior computation |
 | `limits` | tuple | (-1, 1) | (min, max) limits applied to both axes of the square latent space |
-| `pca_initialization` | bool | True | Initialize embeddings with PCA |
+| `pretrained_models` | pd.DataFrame | None | Optional pretrained item parameters |
+| `pretrained_embedding` | pd.DataFrame | None | Optional pretrained user embedding |
+| `pca_initialization` | bool | True | Initialize embeddings with PCA (ignored if pretrained embedding is given) |
 | `random_state` | int | 0 | Random seed for reproducibility |
+| `transformation` | np.ndarray | identity(2) | 2×2 linear transformation applied to the initial embedding |
+| `kernel` | callable | None | Feature transform `(N, 2) -> (N, D)` for polynomial / RFF features |
 
 #### Key Methods
 
 | Method | Description |
 |--------|-------------|
-| `iterate(n_iterations)` | Run n iterations of posterior fitting and model updating |
-| `fit_posteriors()` | Compute posterior distributions for all users |
-| `fit_models()` | Fit logistic regression models for all items |
-| `get_embedding()` | Return current user embeddings as DataFrame |
-| `get_item_parameters()` | Return item model parameters |
-| `embed_new_user(answers)` | Embed a new user given their answers |
-| `impute_remaining_answers(answers)` | Impute missing answers for a user |
-| `evaluate()` | Return MAE and accuracy on training data |
+| `iterate(n_iterations, use_posteriors=False)` | Alternate posterior fitting and model updating for n iterations |
+| `fit_posteriors()` | Compute posterior distributions for all users and update the embedding |
+| `fit_models(use_posteriors=False)` | Fit logistic regression models for all items (optionally weighted by posteriors) |
+| `apply_prior(prior_variance)` | Re-apply a Gaussian prior using cached log-likelihoods |
+| `transform_embedding(M)` | Apply a 2×2 linear transformation to the embedding and refit models |
+| `predict(positions, items=None)` | Predict P(Y=1) for items at given 2D positions |
+| `compute_posterior_X(answers)` | Grid posterior for a given answer vector |
+| `embed_user(answers)` | Embed a (new or existing) user given their answers |
+| `impute_remaining_answers(answers)` | Impute missing answers for a user via Bayesian marginalization |
+| `sample_answers(answers, method)` | Draw synthetic answer vectors (`"rasch"`, `"posterior"`, `"random"`) |
+| `get_embedding()` | Return current user embeddings as a DataFrame |
+| `get_parameters()` | Return item model parameters as a DataFrame |
+| `get_posteriors()` | Return current grid posteriors as a DataFrame |
+| `evaluate()` | Return a dict with `mae`, `accuracy`, `boundary`, and `spread` on training data |
 
 ## Dependencies
 

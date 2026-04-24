@@ -25,13 +25,13 @@ Before any iterative refinement, IXPLORE needs an initial layout of users in 2D.
 
 ### How it works
 
-1. **Mean imputation**: Missing values (NaN) in the reaction matrix are filled with column means using `sklearn.impute.SimpleImputer`. This is only used for initialization and does not affect the final model.
+1. **Iterative PCA imputation**: Missing values (NaN) in the reaction matrix are filled via iterative PCA reconstruction (Grung & Manne 1998, implemented in `ixplore.utils.iterative_pca_impute`). This is only used for initialization and does not affect the final model.
 
-2. **PCA projection**: The imputed matrix is reduced to 2 dimensions using `sklearn.decomposition.PCA`, capturing the two directions of greatest variance in user responses.
+2. **PCA projection**: The imputed matrix is reduced to 2 dimensions using a truncated SVD (`ixplore.optimization.pca_decompose`), capturing the two directions of greatest variance in user responses.
 
-3. **Normalization**: The resulting coordinates are centered (subtract the midpoint between min and max) and scaled to fit within the [-1, 1] bounds of the latent space.
+3. **Normalization**: The resulting coordinates are centered on the midpoint between min and max and scaled to fit inside the configured `limits` (default `[-1, 1]`) via `ixplore.utils.normalize_embedding`.
 
-4. **Logistic regression fit**: For each item, a `sklearn.linear_model.LogisticRegression` model is fit using the 2D user coordinates as features and the (stochastically binarized) responses as targets. This yields three parameters per item: two coefficients (beta1, beta2) defining the orientation of the decision boundary, and an intercept (alpha) defining its offset.
+4. **Logistic regression fit**: For each item, a logistic regression is fit with a Newton solver (`ixplore.optimization.fit_logistic_newton`) using the 2D user coordinates as features and the normalized (soft) responses as targets. This yields three parameters per item: two coefficients (`beta1`, `beta2`) defining the orientation of the decision boundary, and an intercept (`alpha`) defining its offset.
 
 After this step, the model already has a meaningful (though approximate) embedding and set of decision boundaries.
 
@@ -48,8 +48,8 @@ reactions = pd.read_csv('data/likert_reactions.csv', index_col=0)
 model = IXPLORE(reactions, pca_initialization=True, random_state=17)
 
 # Inspect initial embedding and item parameters
-embedding = model.get_embedding()        # DataFrame (N x 2) with columns ['x', 'y']
-parameters = model.get_item_parameters() # DataFrame (K x 3) with columns ['beta1', 'beta2', 'alpha']
+embedding = model.get_embedding()    # DataFrame (N x 2) with columns ['x', 'y']
+parameters = model.get_parameters()  # DataFrame (K x 3) with columns ['beta1', 'beta2', 'alpha']
 
 print(embedding.head())
 print(parameters.head())
@@ -87,11 +87,11 @@ The components are:
 
 1. **Prior P(position)**: A multivariate Gaussian (default: zero mean, unit covariance) evaluated at each grid point and normalized. This encodes the belief that users are likely near the center of the space before observing any data.
 
-2. **Likelihood P(answers | position)**: For each grid point, the model computes how well that position explains the user's observed answers. For a single item with response value `y` and predicted probability `p(x)`, the likelihood contribution is `1 - |y - p(x)|`. The total likelihood is the product across all answered items.
+2. **Likelihood P(answers | position)**: For each grid point, the model computes how well that position explains the user's observed answers. For a single item with response value `y` and predicted probability `p(x)`, the (L1) log-likelihood contribution is `log(1 - |y - p(x)|)`. The total log-likelihood is the sum across all answered items.
 
-3. **Posterior**: The element-wise product of prior and likelihood, normalized to sum to 1. The result is a probability distribution over the 10,000 grid points.
+3. **Posterior**: The element-wise sum of log-prior and log-likelihood is exponentiated and normalized to sum to 1. The result is a probability distribution over the 10,000 grid points.
 
-The **MAP estimate** (mean a posteriori) is extracted as the grid point with the expectation value of the posterior distribution and used as the user's point embedding.
+The **posterior mean** is extracted from the posterior distribution (via `ixplore.posteriors.posterior_means`) and used as the user's point embedding.
 
 ### Code example
 
@@ -117,7 +117,10 @@ new_user = pd.Series({'Q15': 0, 'Q1': 1}, name='new_user')
 fig, ax = plot_posterior(model, new_user)
 
 # Access raw posterior values (array of shape (10000,))
-posterior = model.posterior_X(new_user)
+posterior = model.compute_posterior_X(new_user)
+
+# Or get all user posteriors as a DataFrame
+posteriors = model.get_posteriors()
 ```
 
 ### Tuning the prior
@@ -130,6 +133,10 @@ model = IXPLORE(reactions, prior_variance=1.0)
 
 # Tighter prior: stronger regularization, useful for sparse data
 model = IXPLORE(reactions, prior_variance=0.1)
+
+# Re-apply a different prior without recomputing likelihoods (requires fit_posteriors first)
+model.fit_posteriors()
+model.apply_prior(prior_variance=0.3)
 ```
 
 ### Notebook
@@ -146,15 +153,13 @@ Neither the user positions nor the item boundaries are known in advance. IXPLORE
 
 ### How it works
 
-Each iteration consists of three steps:
+Each iteration consists of two steps:
 
-1. **Fit posteriors**: For every user, compute the posterior distribution over the grid using the current item models (logistic regression parameters). Extract the MAP estimate as the new user position.
+1. **Fit posteriors**: For every user, compute the posterior distribution over the grid using the current item models (logistic regression parameters). Extract the posterior mean as the new user position.
 
-2. **Normalize embedding**: Center the embedding (subtract midpoint) and scale it to fit within [-1, 1] bounds. This prevents drift and ensures the grid covers all users.
+2. **Fit models**: For each item, fit a new logistic regression using the updated user positions as features and the (soft) responses as targets. When `use_posteriors=True`, the fit uses the full grid posteriors as sample weights rather than the point embeddings. Update the prediction grid accordingly.
 
-3. **Fit models**: For each item, fit a new logistic regression using the updated user positions as features and the binarized responses as targets. Update the likelihood grid accordingly.
-
-The convergence of this process is measured by decreasing MAE (mean absolute error) and increasing accuracy on the training data.
+The convergence of this process is measured by decreasing MAE (mean absolute error) and increasing accuracy on the training data, tracked in `model.fit_logger`.
 
 ### Code example
 
@@ -170,15 +175,17 @@ model = IXPLORE(reactions, pca_initialization=True, random_state=17)
 # Run 5 iterations of refinement
 model.iterate(n_iterations=5)
 
+# Or propagate uncertainty into the item fits via the grid posteriors
+model.iterate(n_iterations=5, use_posteriors=True)
+
 # Check fit quality
 metrics = model.evaluate()
 print(f"MAE: {metrics['mae']:.4f}, Accuracy: {metrics['accuracy']:.4f}, "
       f"Boundary: {metrics['boundary']:.4f}, Spread: {metrics['spread']:.4f}")
 
 # You can also run the steps manually for fine-grained control
-model.fit_posteriors()       # Step 1: update user positions from posteriors
-model.normalize_embedding()  # Step 2: center and scale
-model.fit_models()           # Step 3: refit item logistic regressions
+model.fit_posteriors()  # Update user positions from posteriors (posterior mean)
+model.fit_models()      # Refit item logistic regressions on the updated embedding
 ```
 
 After convergence, you can optionally apply a linear transformation (rotation, scaling, shear) to align the embedding axes with interpretable dimensions:
@@ -186,7 +193,7 @@ After convergence, you can optionally apply a linear transformation (rotation, s
 ```python
 from ixplore.utils import transformation_matrix
 
-M = transformation_matrix(rotation=55, scale=(1.1, 1))
+M = transformation_matrix(rotate=55, scale=(1.1, 1))
 model.transform_embedding(M)
 ```
 
@@ -232,13 +239,17 @@ model = IXPLORE(reactions, pca_initialization=True)
 new_user_answers = pd.Series({'Q1': 0, 'Q15': 1, 'Q30': 0}, name='new_user')
 
 # Get their position in the latent space
-position = model.embed_new_user(new_user_answers)
+position = model.embed_user(new_user_answers)
 print(f"New user position: x={position[0]:.3f}, y={position[1]:.3f}")
 
 # --- Impute missing answers, keeping observed values ---
 imputed = model.impute_remaining_answers(new_user_answers)
 print(imputed.head())
 # Q1, Q15, Q30 retain their original values; all others are filled with predictions
+
+# --- Draw synthetic answer samples from the posterior ---
+samples = model.sample_answers(new_user_answers, method='posterior', num_samples=100)
+# shape (100, K): probabilities drawn from posterior-sampled latent positions
 ```
 
 ### Notebook
@@ -253,22 +264,25 @@ See [notebooks/demo.ipynb](../notebooks/demo.ipynb) for examples of embedding ne
 Input: Reaction matrix R (N users x K items), possibly with missing values
 
 [INITIALIZATION]
-  Option A: PCA on mean-imputed R -> initial 2D positions
-  Option B: Random uniform positions in [-1, 1]^2
+  Option A: Iterative-PCA-imputed R -> initial 2D positions (then normalize)
+  Option B: Random uniform positions in limits^2
   Option C: Load pretrained positions
-  -> Fit K logistic regressions on initial positions
+  Optional: apply a 2x2 transformation matrix to the initial embedding
+  -> Fit K logistic regressions on initial positions (Newton solver)
 
 [ITERATIVE REFINEMENT] (repeat for n iterations)
   1. For each user:
-       - Compute posterior P(x | answers) on 100x100 grid
-       - Extract MAP estimate as new position
-  2. Center and scale all positions to [-1, 1]^2
-  3. For each item:
-       - Fit logistic regression on updated positions
-       - Update likelihood grid
+       - Compute posterior P(x | answers) on sampling_resolution^2 grid
+       - Extract posterior mean as new position
+  2. For each item:
+       - Fit logistic regression on the updated embedding (or, if
+         use_posteriors=True, weight the fit by the grid posteriors)
+       - Update prediction grid
 
 [INFERENCE]
-  - New user embedding: posterior -> MAP estimate
-  - Answer prediction: marginalize likelihood over posterior
-  - Imputation: fill missing with predicted probabilities
+  - New user embedding:  model.embed_user(answers)             -> posterior mean
+  - Posterior on grid:   model.compute_posterior_X(answers)    -> (G,) array
+  - Answer prediction:   model.predict(positions, items=...)   -> (N, K) probs
+  - Imputation:          model.impute_remaining_answers(...)   -> filled series
+  - Synthetic samples:   model.sample_answers(..., method=...) -> (num_samples, K)
 ```
