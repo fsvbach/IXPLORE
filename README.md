@@ -4,16 +4,25 @@
 
 ![IXPLORE overview](https://raw.githubusercontent.com/fsvbach/IXPLORE/refs/heads/main/figures/overview.png)
 
-## Applicable data
+## Overview
 
-IXPLORE is designed for user-item reaction matrices commonly found in political questionnaires. It's well suited for binary data (e.g., agree/disagree) and Likert-scale responses, where each question measures different preferences dimensions. Use IXPLORE when you want a compact, interpretable 2D visualization of the latent political landscape or when you need interpretable imputation of missing responses based on users' latent positions.
+IXPLORE is a Python package that jointly embeds users and questionnaire items in a shared 2D latent space. It is designed for user-item reaction matrices commonly found in political questionnaires, where each row represents a user and each column represents an item (question). Responses can be binary (agree/disagree) or Likert-scale values, which are automatically normalized to the [0, 1] range.
 
-## Features
+The core idea is simple: a user's position in 2D space should predict their responses to all items. Each item defines a logistic regression decision boundary in this space, separating regions of agreement from disagreement. The model iteratively refines both the user positions and the item boundaries until they are mutually consistent.
 
-IXPLORE jointly learns a posterior distribution for each user and a logistic regression model for each questionnaire item. It visualizes the political landscpae in a two dimensional space. In inference, it can impute missing values and generate answers based on any latent position.
+IXPLORE produces:
+- **User embeddings** (N x 2): a 2D coordinate for each user representing their latent preferences
+- **Item parameters** (K x 3): logistic regression coefficients (beta1, beta2, intercept) defining each item's decision boundary
+- **Posterior distributions**: full probability distributions over the 2D space quantifying uncertainty about each user's position
+
+This enables interpretable visualization of preference landscapes, principled uncertainty quantification, and missing value imputation grounded in the learned geometry.
+
+For the design rationale behind these choices, see [docs/motivation.md](docs/motivation.md). For a feature-by-feature walkthrough and the full API reference, see [docs/documentation.md](docs/documentation.md).
+
+### Features
 
 - **User Embedding**: Compute posterior distributions for users based on their reactions
-- **Item Models**: Define decision boundaries for each questions with logistic regression models
+- **Item Models**: Define decision boundaries for each question with logistic regression models
 - **Iterative Refinement**: Jointly optimize user embeddings and item models through iterative updates
 - **Flexible Initialization**: Initialize embeddings via PCA, random values, or load pretrained embeddings
 - **Missing Data Handling**: Robust to missing values in the user-item reaction matrix
@@ -103,41 +112,7 @@ users = pd.read_csv('../data/synthetic_users.csv', index_col=0)
 _ = plot_overview(model, question='Q12', user='1', colors=users.color)
 ```
 
-### IXPLORE Class
-
-#### Constructor Parameters
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `reactions` | pd.DataFrame | required | User-item reaction matrix (users as index, items as columns) |
-| `prior_variance` | float | 1.0 | Diagonal entry of the Gaussian prior covariance matrix |
-| `sampling_resolution` | int | 100 | Grid resolution per axis for posterior computation |
-| `limits` | tuple | (-1, 1) | (min, max) limits applied to both axes of the square latent space |
-| `pretrained_models` | pd.DataFrame | None | Optional pretrained item parameters |
-| `pretrained_embedding` | pd.DataFrame | None | Optional pretrained user embedding |
-| `pca_initialization` | bool | True | Initialize embeddings with PCA (ignored if pretrained embedding is given) |
-| `random_state` | int | 0 | Random seed for reproducibility |
-| `transformation` | np.ndarray | identity(2) | 2×2 linear transformation applied to the initial embedding |
-| `kernel` | callable | None | Feature transform `(N, 2) -> (N, D)` for polynomial / RFF features |
-
-#### Key Methods
-
-| Method | Description |
-|--------|-------------|
-| `iterate(n_iterations, use_posteriors=False)` | Alternate posterior fitting and model updating for n iterations |
-| `fit_posteriors()` | Compute posterior distributions for all users and update the embedding |
-| `fit_models(use_posteriors=False)` | Fit logistic regression models for all items (optionally weighted by posteriors) |
-| `apply_prior(prior_variance)` | Re-apply a Gaussian prior using cached log-likelihoods |
-| `transform_embedding(M)` | Apply a 2×2 linear transformation to the embedding and refit models |
-| `predict(positions, items=None)` | Predict P(Y=1) for items at given 2D positions |
-| `compute_posterior_X(answers)` | Grid posterior for a given answer vector |
-| `embed_user(answers)` | Embed a (new or existing) user given their answers |
-| `impute_remaining_answers(answers)` | Impute missing answers for a user via Bayesian marginalization |
-| `sample_answers(answers, method)` | Draw synthetic answer vectors (`"rasch"`, `"posterior"`, `"random"`) |
-| `get_embedding()` | Return current user embeddings as a DataFrame |
-| `get_parameters()` | Return item model parameters as a DataFrame |
-| `get_posteriors()` | Return current grid posteriors as a DataFrame |
-| `evaluate()` | Return a dict with `mae`, `accuracy`, `boundary`, and `spread` on training data |
+For the full constructor parameters and method reference, see [docs/documentation.md](docs/documentation.md#api-reference).
 
 ## Dependencies
 

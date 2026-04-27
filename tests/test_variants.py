@@ -29,9 +29,9 @@ def test_apply_prior(fresh: IXPLORE) -> None:
 
 
 def test_fit_models_with_posteriors(fresh: IXPLORE) -> None:
-    fresh.fit_models(use_posteriors=True)
+    fresh.fit_models(point_estimates=False)
     assert fresh.item_parameters.shape == (K, D + 1)
-    assert fresh.predictions_X.shape == (G, K)
+    assert fresh._log_p_X.shape == (G, K)
 
 
 def test_custom_kernel(data: pd.DataFrame) -> None:

@@ -2,22 +2,11 @@
 
 **Iterative Probabilistic Logistic Regression Embedding**
 
-## Overview
-
-IXPLORE is a Python package that jointly embeds users and questionnaire items in a shared 2D latent space. It is designed for user-item reaction matrices commonly found in political questionnaires, where each row represents a user and each column represents an item (question). Responses can be binary (agree/disagree) or Likert-scale values, which are automatically normalized to the [0, 1] range.
-
-The core idea is simple: a user's position in 2D space should predict their responses to all items. Each item defines a logistic regression decision boundary in this space, separating regions of agreement from disagreement. The model iteratively refines both the user positions and the item boundaries until they are mutually consistent.
-
-IXPLORE produces:
-- **User embeddings** (N x 2): a 2D coordinate for each user representing their latent preferences
-- **Item parameters** (K x 3): logistic regression coefficients (beta1, beta2, intercept) defining each item's decision boundary
-- **Posterior distributions**: full probability distributions over the 2D space quantifying uncertainty about each user's position
-
-This enables interpretable visualization of preference landscapes, principled uncertainty quantification, and missing value imputation grounded in the learned geometry.
+This document walks through IXPLORE's algorithm in the order it executes — initialization, posterior computation, iterative refinement, and inference — and then provides the full API reference. For the high-level pitch and installation, see the [README](../README.md). For the design rationale behind the modeling choices (bounded 2D space, grid inference, BCE likelihood, posterior mean over MAP), see [motivation.md](motivation.md).
 
 ---
 
-## Feature 1: Baseline Embedding (PCA + Logistic Regression)
+## Stage 1: Initialization (PCA + Logistic Regression)
 
 ### Purpose
 
@@ -37,6 +26,8 @@ After this step, the model already has a meaningful (though approximate) embeddi
 
 ### Code example
 
+For a runnable end-to-end version of the snippet below, see the [Quick Start in the README](../README.md#quick-start).
+
 ```python
 import pandas as pd
 from ixplore import IXPLORE
@@ -50,9 +41,6 @@ model = IXPLORE(reactions, pca_initialization=True, random_state=17)
 # Inspect initial embedding and item parameters
 embedding = model.get_embedding()    # DataFrame (N x 2) with columns ['x', 'y']
 parameters = model.get_parameters()  # DataFrame (K x 3) with columns ['beta1', 'beta2', 'alpha']
-
-print(embedding.head())
-print(parameters.head())
 ```
 
 Alternatively, you can initialize with random positions instead of PCA:
@@ -61,13 +49,8 @@ Alternatively, you can initialize with random positions instead of PCA:
 model = IXPLORE(reactions, pca_initialization=False, random_state=17)
 ```
 
-### Notebook
 
-See [notebooks/demo.ipynb](../notebooks/demo.ipynb) for a side-by-side comparison of random vs. PCA initialization, including visualizations of the initial embeddings and decision boundaries.
-
----
-
-## Feature 2: Posterior Distributions for Uncertainty Quantification
+## Stage 2: Posterior Computation
 
 ### Purpose
 
@@ -145,7 +128,7 @@ See [notebooks/demo.ipynb](../notebooks/demo.ipynb) for posterior visualizations
 
 ---
 
-## Feature 3: Iterative Refinement
+## Stage 3: Iterative Optimization
 
 ### Purpose
 
@@ -157,9 +140,17 @@ Each iteration consists of two steps:
 
 1. **Fit posteriors**: For every user, compute the posterior distribution over the grid using the current item models (logistic regression parameters). Extract the posterior mean as the new user position.
 
-2. **Fit models**: For each item, fit a new logistic regression using the updated user positions as features and the (soft) responses as targets. When `use_posteriors=True`, the fit uses the full grid posteriors as sample weights rather than the point embeddings. Update the prediction grid accordingly.
+2. **Fit models**: For each item, fit a new logistic regression using the updated user positions as features and the (soft) responses as targets. By default (`point_estimates=True`), the fit uses each user's posterior-mean position. When `point_estimates=False`, the fit instead uses the full grid posteriors as sample weights — propagating user-position uncertainty into the item fit. Update the prediction grid accordingly.
 
 The convergence of this process is measured by decreasing MAE (mean absolute error) and increasing accuracy on the training data, tracked in `model.fit_logger`.
+
+### Sparse responses: `scale_likelihoods`
+
+By default, every observed answer contributes one log-likelihood term to its user's posterior. Users who answered few questions therefore have flatter likelihoods than users who answered many, and the prior dominates their embedding more strongly.
+
+When `scale_likelihoods=True`, each user's log-likelihood is multiplied by `K / K_obs_n` (number of items / number of observed answers for that user). This rescales the *effective* sample size to `K` for every user, so users with sparse responses are pulled by their data with the same total weight as users with dense responses. Useful when response sparsity varies substantially across users and you don't want sparse users to be dominated by the prior.
+
+The flag is exposed on `iterate`, `fit_posteriors`, and `compute_posterior_X` (the new-user inference path). When you set it during training, set it on inference calls too so embeddings are computed under a consistent likelihood. With no missing values it is a no-op.
 
 ### Code example
 
@@ -176,7 +167,10 @@ model = IXPLORE(reactions, pca_initialization=True, random_state=17)
 model.iterate(n_iterations=5)
 
 # Or propagate uncertainty into the item fits via the grid posteriors
-model.iterate(n_iterations=5, use_posteriors=True)
+model.iterate(n_iterations=5, point_estimates=False)
+
+# Or equalize effective sample size across users with varying response sparsity
+model.iterate(n_iterations=5, scale_likelihoods=True)
 
 # Check fit quality
 metrics = model.evaluate()
@@ -203,7 +197,7 @@ See [notebooks/demo.ipynb](../notebooks/demo.ipynb) for a step-by-step walkthrou
 
 ---
 
-## Feature 4: Missing Value Imputation
+## Stage 4: Inference & Imputation
 
 ### Purpose
 
@@ -276,7 +270,7 @@ Input: Reaction matrix R (N users x K items), possibly with missing values
        - Extract posterior mean as new position
   2. For each item:
        - Fit logistic regression on the updated embedding (or, if
-         use_posteriors=True, weight the fit by the grid posteriors)
+         point_estimates=False, weight the fit by the grid posteriors)
        - Update prediction grid
 
 [INFERENCE]
@@ -286,3 +280,41 @@ Input: Reaction matrix R (N users x K items), possibly with missing values
   - Imputation:          model.impute_remaining_answers(...)   -> filled series
   - Synthetic samples:   model.sample_answers(..., method=...) -> (num_samples, K)
 ```
+
+---
+
+## API Reference
+
+### Constructor parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `reactions` | pd.DataFrame | required | User-item reaction matrix (users as index, items as columns) |
+| `prior_variance` | float | 1.0 | Diagonal entry of the Gaussian prior covariance matrix |
+| `sampling_resolution` | int | 100 | Grid resolution per axis for posterior computation |
+| `limits` | tuple | (-1, 1) | (min, max) limits applied to both axes of the square latent space |
+| `pretrained_models` | pd.DataFrame | None | Optional pretrained item parameters |
+| `pretrained_embedding` | pd.DataFrame | None | Optional pretrained user embedding |
+| `pca_initialization` | bool | True | Initialize embeddings with PCA (ignored if pretrained embedding is given) |
+| `random_state` | int | 0 | Random seed for reproducibility |
+| `transformation` | np.ndarray | identity(2) | 2×2 linear transformation applied to the initial embedding |
+| `kernel` | callable | None | Feature transform `(N, 2) -> (N, D)` for polynomial / RFF features |
+
+### Key methods
+
+| Method | Description |
+|--------|-------------|
+| `iterate(n_iterations, point_estimates=True, scale_likelihoods=False)` | Alternate posterior fitting and model updating for n iterations |
+| `fit_posteriors(scale_likelihoods=False)` | Compute posterior distributions for all users and update the embedding |
+| `fit_models(point_estimates=True)` | Fit each item on posterior-mean embeddings (default) or on the grid weighted by full posteriors (`point_estimates=False`) |
+| `apply_prior(prior_variance)` | Re-apply a Gaussian prior using cached log-likelihoods (cheap re-evaluation, no full likelihood pass) |
+| `transform_embedding(M)` | Apply a 2×2 linear transformation to the embedding and refit models |
+| `predict(positions, items=None)` | Predict P(Y=1) for items at given 2D positions |
+| `compute_posterior_X(answers, weights=None, scale_likelihoods=False)` | Grid posterior for a given answer vector (used by all single-user inference) |
+| `embed_user(answers)` | Embed a (new or existing) user given their answers |
+| `impute_remaining_answers(answers)` | Impute missing answers for a user via Bayesian marginalization |
+| `sample_answers(answers, method)` | Draw synthetic answer vectors (`"rasch"`, `"posterior"`, `"random"`) |
+| `get_embedding()` | Return current user embeddings as a DataFrame |
+| `get_parameters()` | Return item model parameters as a DataFrame |
+| `get_posteriors()` | Return current grid posteriors as a DataFrame |
+| `evaluate()` | Return a dict with `mae`, `accuracy`, `boundary`, and `spread` on training data |

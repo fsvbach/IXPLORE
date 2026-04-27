@@ -105,9 +105,8 @@ def plot_likelihood(
     xx = xplore.X[:, 0].reshape(meshgrid_size, meshgrid_size)
     yy = xplore.X[:, 1].reshape(meshgrid_size, meshgrid_size)
 
-    # Predict probabilities on the grid
-    assert xplore.predictions_X is not None, "Predictions must be computed before plotting."
-    Z = xplore.predictions_X[:,xplore.items.get_loc(feature)]
+    # Predict probabilities on the grid (single column, derived from the log-prediction cache)
+    Z = np.exp(xplore._log_p_X[:, xplore.items.get_loc(feature)])
     Z = Z.reshape(xx.shape)
 
     # Plot the decision boundary at 50% probability

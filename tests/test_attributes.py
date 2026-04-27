@@ -13,6 +13,7 @@ def test_grid_shapes(xplore: IXPLORE) -> None:
 def test_fitted_state_shapes(xplore: IXPLORE) -> None:
     assert xplore.embedding.shape == (N, 2)
     assert xplore.item_parameters.shape == (K, D + 1)
-    assert xplore.predictions_X.shape == (G, K)
+    assert xplore._log_p_X.shape == (G, K)
+    assert xplore._log_1mp_X.shape == (G, K)
     assert xplore.log_likelihoods_X.shape == (N, G)
     assert len(xplore.parameter_names) == D + 1
