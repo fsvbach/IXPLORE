@@ -121,6 +121,7 @@ def plot_likelihood(
 def plot_posterior(
     xplore: IXPLORE,
     answers: pd.Series,
+    weights: pd.Series | None = None,
     cmap: Colormap = colormap,
     ax: axes.Axes | None = None,
     add_bar: bool = True,
@@ -132,7 +133,7 @@ def plot_posterior(
     yy = xplore.X[:, 1].reshape(meshgrid_size, meshgrid_size)
 
     # Predict probabilities on the grid
-    Z = xplore.compute_posterior_X(answers)
+    Z = xplore.compute_posterior_X(answers, weights=weights)
     zz = Z.reshape(xx.shape)
 
     # Plot heatmap of probability
@@ -181,10 +182,8 @@ def plot_overview(
     
     # Plot posterior for the user if specified
     if user is not None:
-        i = xplore.users.get_loc(user)
-        n_answers = xplore.reactions[i, :]
-        user_answers = pd.Series(n_answers, index=xplore.items, name=user).dropna()
-        plot_posterior(xplore, user_answers, ax=ax1)
+        user_answers, user_weights = xplore.get_reactions(user)
+        plot_posterior(xplore, user_answers, weights=user_weights, ax=ax1)
         ax1.set_title(f'Posterior for User {user}')
 
     i = xplore.items.get_loc(question)

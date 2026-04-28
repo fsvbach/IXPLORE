@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Callable, Literal
 
-from scipy.special import expit
+from scipy.special import expit, log_expit
 import pandas as pd
 import numpy as np
 
@@ -22,6 +22,7 @@ class IXPLORE:
     def __init__(
         self,
         reactions: pd.DataFrame,
+        weights: pd.DataFrame | None = None,
         prior_variance: float = 1.0,
         sampling_resolution: int = 100,
         limits: tuple[float, float] = (-1, 1),
@@ -32,7 +33,7 @@ class IXPLORE:
         transformation: np.ndarray = np.identity(2),
         kernel: Callable[[np.ndarray], np.ndarray] | None = None,
         use_point_estimates: bool = True,
-        scale_sparse_likelihoods: bool = True,
+        normalize_likelihoods: bool = True,
     ) -> None:
         """Initialize the IXPLORE model.
 
@@ -40,6 +41,8 @@ class IXPLORE:
         ----------
         reactions: pd.DataFrame
             The user-item reaction matrix with users as index and items as columns. Can contain missing values (NaN).
+        weights: pd.DataFrame, optional
+            The weights applied to the log-likelihood at fit time. Same shape and indices as `reactions`.
         prior_variance: float
             The diagonal entry of the Gaussian prior covariance matrix. Default is 1.0.
         sampling_resolution: int
@@ -55,20 +58,19 @@ class IXPLORE:
         random_state: int
             The random state for reproducibility.
         transformation: np.ndarray
-            A 2x2 transformation matrix to apply to the embedding. Default is the identity matrix.
+            A 2x2 transformation matrix applied to the embedding. Default is the identity matrix.
         kernel: callable, optional
-            A feature transform function mapping (N, 2) arrays to (N, D) arrays. If None, the identity
-            function is used (no feature engineering). Can be used for e.g. polynomial or RFF features.
+            A feature transform function mapping (N, 2) arrays to (N, D) arrays. If None, the identity function is used (no feature engineering). Can be used for e.g. polynomial or RFF features.
         use_point_estimates: bool
             Default for `fit_models`: if True, fit each item on the users' posterior-mean point
             estimates; if False, fit on the grid using the full posteriors as sample weights.
-        scale_sparse_likelihoods: bool
+        normalize_likelihoods: bool
             Default for `fit_posteriors`: if True, rescale per-user likelihoods so users with
             sparse responses are not penalized by having fewer observed terms.
         """
         self.kernel = kernel if kernel is not None else lambda X: X
         self.use_point_estimates = use_point_estimates
-        self.scale_sparse_likelihoods = scale_sparse_likelihoods
+        self.normalize_likelihoods = normalize_likelihoods
         self.get_point_estimates = posterior_means
 
         ### Store data as numpy arrays
@@ -80,6 +82,14 @@ class IXPLORE:
         logger.info(f"Number of users for model: {self.number_of_users}")
         logger.info(f"Number of items: {self.number_of_items}")
         logger.info(f"Number of missing values: {np.isnan(self.reactions).sum()} ({np.isnan(self.reactions).mean()*100:.2f}%)")
+
+        ### Store weights
+        self.weights = None
+        if weights is not None:
+            assert weights.index.equals(reactions.index), "weights.index must match reactions.index."
+            assert weights.columns.equals(reactions.columns), "weights.columns must match reactions.columns."
+            self.weights = weights.values
+            logger.info(f"Per-(user, item) weights provided with shape {self.weights.shape}.")
 
         ### Create grid
         self.sampling_resolution = sampling_resolution
@@ -174,7 +184,7 @@ class IXPLORE:
         """Compute log-likelihoods on the grid for every user and update the embedding."""
         Y = np.nan_to_num(self.reactions, nan=0.0)               # (N, K)
         M = (~np.isnan(self.reactions)).astype(Y.dtype)          # (N, K)
-        self.log_likelihoods_X = self._compute_log_likelihoods_X(Y, M, weights=None)
+        self.log_likelihoods_X = self._compute_log_likelihoods_X(Y, M, weights=self.weights)
         self.embedding = self.get_point_estimates(self._posteriors_X(), self.X)
 
     def apply_prior(self, prior_variance: float) -> None:
@@ -185,12 +195,7 @@ class IXPLORE:
         self.embedding = self.get_point_estimates(self._posteriors_X(), self.X)
 
     def fit_models(self) -> None:
-        """Fit logistic regression models for each item.
-
-        If `self.use_point_estimates` is True, fit each item on the users'
-        posterior-mean point estimates (`self.embedding`). If False, fit each item
-        on the grid using the full posterior distributions as sample weights.
-        """
+        """Fit logistic regression models for each item."""
         if not self.use_point_estimates and self.log_likelihoods_X is not None:
             item_parameters = self._fit_models_posterior()
         else:
@@ -202,15 +207,20 @@ class IXPLORE:
         self,
         positions: np.ndarray,
         items: list[str] | pd.Index | None = None,
+        logits: bool = False,
     ) -> np.ndarray:
-        """Predict P(Y=1) for each item at each 2D position, shape (N, len(items))."""
+        """Predict P(Y=1) for each item at each 2D position, shape (N, len(items)).
+
+        If `logits=True`, return the raw logit z = beta . phi(x) + alpha instead of sigma(z).
+        """
         if items is None:
             items = self.items
         index = self.items.get_indexer(items)
         if not len(positions):
             return np.array([])
         features = utils.add_ones(self.kernel(positions.reshape(-1, 2)))
-        return expit(features @ self.item_parameters[index, :].T)
+        Z = features @ self.item_parameters[index, :].T
+        return Z if logits else expit(Z)
     
     # ------------------------------------------------------------------
     # Inference
@@ -220,40 +230,40 @@ class IXPLORE:
         answers: pd.Series,
         weights: pd.Series | None = None,
     ) -> np.ndarray:
-        """Compute the posterior over the grid for a user's answers, shape (G,).
-
-        Treats the user as a (1, K) row and reuses the same BCE helper as
-        `fit_posteriors`.
-        """
+        """Compute the posterior over the grid for a user's answers, shape (G,)."""
         K = self.number_of_items
+        observed = answers.dropna()
+        assert ((observed >= 0) & (observed <= 1)).all(), f"answers must lie in [0, 1]: {observed.to_dict()}"
         Y = np.zeros((1, K))
         M = np.zeros((1, K))
-        observed = answers.dropna()
         idx = self.items.get_indexer(observed.index)
         Y[0, idx] = observed.values
         M[0, idx] = 1.0
+        W = None
         if weights is not None:
             W = np.zeros((1, K))
-            W[0, idx] = weights.reindex(observed.index).values
-        else:
-            W = None
+            W[0, idx] = weights.reindex(observed.index).fillna(1.0).values
         log_lik = self._compute_log_likelihoods_X(Y, M, W)[0]
         log_post = log_lik + self.log_prior_X
         log_post -= log_post.max()
         post = np.exp(log_post)
         return post / post.sum()
 
-    def embed_user(self, answers: pd.Series) -> np.ndarray:
+    def embed_user(
+        self,
+        answers: pd.Series,
+        weights: pd.Series | None = None,
+    ) -> np.ndarray:
         """Embed a single user from their answers, returning (x, y)."""
-        return self.get_point_estimates(self.compute_posterior_X(answers)[None, :], self.X)[0]
+        return self.get_point_estimates(self.compute_posterior_X(answers, weights)[None, :], self.X)[0]
 
-    def impute_remaining_answers(self, answers: pd.Series) -> pd.Series:
-        """Fill missing answers via Bayesian marginalization over the grid.
-
-        Computes P(Y=1 | observed answers) for every item and fills only the
-        missing entries; observed answers are kept intact.
-        """
-        P_X_Yi  = self.compute_posterior_X(answers).reshape(-1,1)
+    def impute_remaining_answers(
+        self,
+        answers: pd.Series,
+        weights: pd.Series | None = None,
+    ) -> pd.Series:
+        """Fill missing answers via Bayesian marginalization over the grid; observed answers are kept intact."""
+        P_X_Yi  = self.compute_posterior_X(answers, weights).reshape(-1,1)
         P_Yn1_X = np.exp(self._log_p_X)                                     # (G, K)
         P_XYn1_Yi = P_Yn1_X * P_X_Yi                                        # (G, K)
         P_Yn1_Yi  = P_XYn1_Yi.sum(axis=0)                                   # (K,)
@@ -261,15 +271,20 @@ class IXPLORE:
         answers = pd.Series(index=self.items, dtype=float).fillna(answers)
         return answers.fillna(predictions)
 
-    def predict_all_answers(self, answers: pd.Series) -> pd.Series:
+    def predict_all_answers(
+        self,
+        answers: pd.Series,
+        weights: pd.Series | None = None,
+    ) -> pd.Series:
         """Predict P(Y=1) for every item from the user's embedded position."""
-        position = self.embed_user(answers)
+        position = self.embed_user(answers, weights)
         predictions = self.predict(position[None, :])[0]
         return pd.Series(predictions, name=answers.name, index=self.items)
 
     def sample_answers(
         self,
         answers: pd.Series,
+        weights: pd.Series | None = None,
         method: Literal["rasch", "posterior", "random"] = "posterior",
         num_samples: int = 1000,
         num_options: int = 5,
@@ -289,7 +304,7 @@ class IXPLORE:
             Variance of the Rasch normal distributions (only for "rasch").
         """
         if method == 'rasch':
-            mean_answer = self.impute_remaining_answers(answers)
+            mean_answer = self.impute_remaining_answers(answers, weights)
             probs, answer_options = utils.compute_rasch_values(mean_answer, num_options, variance=variance)
             K, Q = probs.shape
             log_probs = np.log(probs)[None, :, :]          # (1, K, Q)
@@ -297,7 +312,7 @@ class IXPLORE:
             samples = np.argmax(log_probs + gumbel_noise, axis=1)  # shape: (k, Q)
             samples = answer_options[samples]
         elif method == 'posterior':
-            posterior = self.compute_posterior_X(answers)
+            posterior = self.compute_posterior_X(answers, weights)
             samples = self.generator.choice(len(posterior), size=num_samples, p=posterior)
             samples = self.X[samples]
             samples = self.predict(samples)
@@ -309,16 +324,7 @@ class IXPLORE:
     # Evaluation
     # ------------------------------------------------------------------
     def evaluate(self, boundary_threshold: float = 0.05) -> dict[str, float]:
-        """Evaluate model fit on training data.
-
-        Returns
-        -------
-        dict with keys:
-            - 'mae': mean absolute error of the predictions.
-            - 'accuracy': fraction of rounded predictions matching rounded reactions.
-            - 'boundary': fraction of users within `boundary_threshold` of the grid edge.
-            - 'spread': sqrt(std_x^2 + std_y^2) of the embedding.
-        """
+        """Evaluate model fit on training data, returning {mae, accuracy, boundary, spread}."""
         predictions = pd.DataFrame(self.predict(self.embedding),
                                    index=self.users,
                                    columns=self.items)
@@ -356,11 +362,19 @@ class IXPLORE:
         """Return the current posteriors on the grid as a DataFrame indexed by users."""
         return pd.DataFrame(self._posteriors_X(), index=self.users)
 
+    def get_reactions(self, user: str) -> tuple[pd.Series, pd.Series | None]:
+        """Return a user's observed answers and their per-item weights (or None if unweighted)."""
+        i = self.users.get_loc(user)
+        answers = pd.Series(self.reactions[i, :], index=self.items, name=user).dropna()
+        if self.weights is None:
+            return answers, None
+        weights = pd.Series(self.weights[i, :], index=self.items, name=user).loc[answers.index]
+        return answers, weights
+
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
     def _log_metrics(self, prefix: str = "") -> None:
-        """Evaluate, record to fit_logger, and emit an INFO line."""
         metrics = self.evaluate()
         self.fit_logger.log(metrics)
         body = ", ".join(f"{k}: {v:.4f}" for k, v in metrics.items())
@@ -401,26 +415,13 @@ class IXPLORE:
         """Vectorized BCE log-likelihood for an (N, K) input, shape (N, G).
 
         log L_n(g) = sum_k m_nk * w_nk * [ y_nk log p_k(g) + (1 - y_nk) log(1 - p_k(g)) ]
-
-        Single source of truth for the BCE log-likelihood pass: used by
-        `fit_posteriors` for the full reaction matrix and by
-        `compute_posterior_X` for a single (1, K) user row. When
-        `self.scale_sparse_likelihoods` is True, per-user weights are rescaled
-        so effective weights sum to K, preventing users with sparse responses
-        from being penalized by having fewer terms.
-
-        Parameters
-        ----------
-        Y : np.ndarray of shape (N, K)
-            Answer values in [0, 1], NaNs already replaced with 0 (use M to mask).
-        M : np.ndarray of shape (N, K)
-            Observation mask: 1 where observed, 0 where missing.
-        weights : np.ndarray of shape (N, K) or None
-            Per-(user, item) weights. None means uniform weights (each observed
-            answer contributes with weight 1).
         """
-        W = M if weights is None else M * weights
-        if self.scale_sparse_likelihoods:
+        W = M
+        if weights is not None:
+            assert not np.isnan(weights).any(), "NaN in weights array is not allowed."
+            assert (weights >= 0).all(), "Negative weights are not allowed."
+            W = M * weights
+        if self.normalize_likelihoods:
             n_eff = W.sum(axis=1, keepdims=True)                 # (N, 1)
             scale = np.where(n_eff > 0, self.number_of_items / np.maximum(n_eff, 1), 0.0)
             W = W * scale
@@ -429,15 +430,18 @@ class IXPLORE:
     def _recompute_log_predictions(self) -> None:
         """Recompute the per-grid-cell log-prediction tables from item_parameters.
 
-        Computes p_k(g) = sigma(beta_k . phi(g) + alpha_k) at every grid cell
-        and stores its log and the log of its complement, clipped for numerical
-        safety. The vectorized BCE log-likelihood helper
-        `_compute_log_likelihoods_X` reads these tables on every call.
+        Computes the logit z_k(g) = beta_k . phi(g) + alpha_k at every grid cell
+        and stores log p_k(g) = log_sigmoid(z) and log(1 - p_k(g)) = log_sigmoid(-z).
+        Using `log_expit` directly on the logit avoids the asymmetry of going
+        through `expit` then `log`: at |z| ≈ 18, expit(z) is within machine
+        precision of 1, so `log(expit(z))` collapses to 0 even though the true
+        value is -2e-9 — while `log(1 - expit(z)) = -18` stays exact. That
+        asymmetry caps how much weight can pull the posterior toward an item's
+        favoured side.
         """
-        EPS_P: float = 1e-15
-        P = np.clip(self.predict(self.X), EPS_P, 1.0 - EPS_P)  # (G, K)
-        self._log_p_X = np.log(P)             # (G, K)
-        self._log_1mp_X = np.log(1.0 - P)     # (G, K)
+        Z = self.predict(self.X, logits=True)   # (G, K) logits
+        self._log_p_X = log_expit(Z)            # (G, K)  log p_k(g)
+        self._log_1mp_X = log_expit(-Z)         # (G, K)  log (1 - p_k(g))
 
     def _posteriors_X(self) -> np.ndarray:
         """All-user posteriors from cached log-likelihoods and current prior, shape (N, G)."""
