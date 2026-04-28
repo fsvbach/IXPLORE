@@ -29,7 +29,8 @@ def test_apply_prior(fresh: IXPLORE) -> None:
 
 
 def test_fit_models_with_posteriors(fresh: IXPLORE) -> None:
-    fresh.fit_models(point_estimates=False)
+    fresh.use_point_estimates = False
+    fresh.fit_models()
     assert fresh.item_parameters.shape == (K, D + 1)
     assert fresh._log_p_X.shape == (G, K)
 
