@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Callable, Literal
 
 from scipy.special import expit, log_expit
@@ -79,9 +80,6 @@ class IXPLORE:
         self.items = reactions.columns.astype(str)
         self.number_of_users = len(self.users) # N
         self.number_of_items = len(self.items) # K
-        logger.info(f"Number of users for model: {self.number_of_users}")
-        logger.info(f"Number of items: {self.number_of_items}")
-        logger.info(f"Number of missing values: {np.isnan(self.reactions).sum()} ({np.isnan(self.reactions).mean()*100:.2f}%)")
 
         ### Store weights
         self.weights = None
@@ -89,7 +87,7 @@ class IXPLORE:
             assert weights.index.equals(reactions.index), "weights.index must match reactions.index."
             assert weights.columns.equals(reactions.columns), "weights.columns must match reactions.columns."
             self.weights = weights.values
-            logger.info(f"Per-(user, item) weights provided with shape {self.weights.shape}.")
+            logger.debug(f"Per-(user, item) weights provided with shape {self.weights.shape}.")
 
         ### Create grid
         self.sampling_resolution = sampling_resolution
@@ -98,41 +96,41 @@ class IXPLORE:
         self.X_transformed = self.kernel(self.X)
         self.n_features = self.X_transformed.shape[1]
         self.parameter_names = [f'beta{i+1}' for i in range(self.n_features)] + ['alpha']
-        logger.info(f"Grid created with resolution {self.sampling_resolution}x{self.sampling_resolution}, total {self.X.shape[0]} points")
-        logger.info(f"Feature dimensions: {self.n_features} (from 2D input)")
+        logger.debug(f"Grid {self.X.shape[0]} points, {self.n_features} features.")
 
         ### Set prior
         self.prior_variance = prior_variance
         self.log_prior_X = set_gaussian_prior(self.X, prior_variance, log=True)
-        logger.info(f"Gaussian prior set with covariance diagonal entry {self.prior_variance}")
 
         ### Initialize other variables
         self.log_likelihoods_X: np.ndarray | None = None
         self.generator = np.random.Generator(np.random.PCG64(seed=random_state))
         self.fit_logger = FitLogger()
-        logger.info(f"Random state set to {random_state}")
+        logger.debug(f"Random state set to {random_state}")
 
         ### Initialize embedding and models
         self.transformation = transformation
         if pretrained_embedding is not None:
             self.load_embedding(pretrained_embedding)
-            logger.info("Used pretrained embedding.")
         elif pca_initialization:
             self.initialize_with_pca()
             self.embedding = self.embedding @ transformation.T
-            logger.info("Initialized embedding with PCA.")
         else:
             self.embedding = self.generator.uniform(limits[0], limits[1], size=(self.number_of_users, 2))
             self.embedding = self.embedding @ transformation.T
-            logger.info("Initialized embedding with random values.")
+            logger.debug("Initialized embedding with random values.")
 
         if pretrained_models is not None:
             self.load_models(pretrained_models)
-            logger.info("Used pretrained model parameters.")
         else:
             self.fit_models()
-            logger.info("Fitted model parameters from embedding.")
 
+        nan_mask = np.isnan(self.reactions)
+        logger.info(
+            f"IXPLORE initialized: {self.number_of_users} users × {self.number_of_items} items "
+            f"({nan_mask.sum()} missing, {nan_mask.mean()*100:.2f}%), "
+            f"grid {self.sampling_resolution}×{self.sampling_resolution}, prior var={self.prior_variance}."
+        )
         self._log_metrics(prefix="Initial — ")
 
     def __str__(self) -> str:
@@ -175,10 +173,10 @@ class IXPLORE:
     def iterate(self, n_iterations: int = 10) -> None:
         """Alternate fit_posteriors and fit_models for n_iterations."""
         for i in range(n_iterations):
-            logger.info(f"Iteration {i+1}/{n_iterations}")
             self.fit_posteriors()
             self.fit_models()
-            self._log_metrics(prefix=f"Iter {i+1}/{n_iterations} — ")
+            self._log_metrics(prefix=f"Iter {i+1}/{n_iterations} — ", level=logging.DEBUG)
+        self._log_metrics(prefix=f"Fit complete after {n_iterations} iterations — ")
 
     def fit_posteriors(self) -> None:
         """Compute log-likelihoods on the grid for every user and update the embedding."""
@@ -374,11 +372,11 @@ class IXPLORE:
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
-    def _log_metrics(self, prefix: str = "") -> None:
+    def _log_metrics(self, prefix: str = "", level: int = logging.INFO) -> None:
         metrics = self.evaluate()
         self.fit_logger.log(metrics)
         body = ", ".join(f"{k}: {v:.4f}" for k, v in metrics.items())
-        logger.info(f"{prefix}{body}")
+        logger.log(level, f"{prefix}{body}")
 
     def _fit_models_embedding(self) -> list[np.ndarray]:
         """Fit logistic regression on point embeddings with soft labels."""

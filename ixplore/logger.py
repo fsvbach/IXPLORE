@@ -1,15 +1,18 @@
 import logging
 from dataclasses import dataclass, field
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(name)s - %(levelname)s - %(asctime)s - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S"
-)
-
 # Package-level logger
 logger: logging.Logger = logging.getLogger("ixplore")
 logger.setLevel(logging.INFO)
+
+if not logger.handlers:
+    _handler = logging.StreamHandler()
+    _handler.setFormatter(logging.Formatter(
+        "%(name)s - %(levelname)s - %(asctime)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    ))
+    logger.addHandler(_handler)
+    logger.propagate = False
 
 
 @dataclass
