@@ -3,7 +3,7 @@ import pandas as pd
 import pytest
 
 from ixplore import IXPLORE
-from ixplore.posteriors import posterior_maps
+from ixplore.optimization import posterior_maps
 
 from conftest import D, G, K, N, SAMPLING_RESOLUTION
 
@@ -19,20 +19,20 @@ def test_iterate(fresh: IXPLORE) -> None:
     fresh.iterate(n_iterations=2)
     assert fresh.embedding.shape == (N, 2)
     assert fresh.item_parameters.shape == (K, D + 1)
-    assert fresh.log_likelihoods_X.shape == (N, G)
+    assert fresh.log_likelihoods.shape == (N, G)
 
 
 def test_apply_prior(fresh: IXPLORE) -> None:
     fresh.apply_prior(prior_variance=0.5)
     assert fresh.embedding.shape == (N, 2)
-    assert fresh.log_prior_X.shape == (G,)
+    assert fresh.log_prior.shape == (G,)
 
 
 def test_fit_models_with_posteriors(fresh: IXPLORE) -> None:
     fresh.use_point_estimates = False
     fresh.fit_models()
     assert fresh.item_parameters.shape == (K, D + 1)
-    assert fresh._log_p_X.shape == (G, K)
+    assert fresh._log_p1.shape == (G, K)
 
 
 def test_custom_kernel(data: pd.DataFrame) -> None:

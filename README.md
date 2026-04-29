@@ -65,10 +65,10 @@ parameters = model.get_parameters()   # Item parameters (K × 3): ['beta1', 'bet
 
 # Embed a new user based on their answers
 new_user_answers = pd.Series({'Q1': 0.8, 'Q2': 0.2, 'Q3': 0.6}, name='new_user')
-position = model.embed_user(new_user_answers)
+position = model.embed(new_user_answers)
 
 # Impute all answers for a user
-predicted = model.impute_remaining_answers(new_user_answers)
+predicted = model.impute_answers(new_user_answers)
 ```
 
 ### Custom Configuration

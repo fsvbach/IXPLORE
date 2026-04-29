@@ -100,7 +100,7 @@ new_user = pd.Series({'Q15': 0, 'Q1': 1}, name='new_user')
 fig, ax = plot_posterior(model, new_user)
 
 # Access raw posterior values (array of shape (10000,))
-posterior = model.compute_posterior_X(new_user)
+posterior = model.compute_posteriors(new_user)
 
 # Or get all user posteriors as a DataFrame
 posteriors = model.get_posteriors()
@@ -150,7 +150,7 @@ By default, every observed answer contributes one log-likelihood term to its use
 
 When `scale_likelihoods=True`, each user's log-likelihood is multiplied by `K / K_obs_n` (number of items / number of observed answers for that user). This rescales the *effective* sample size to `K` for every user, so users with sparse responses are pulled by their data with the same total weight as users with dense responses. Useful when response sparsity varies substantially across users and you don't want sparse users to be dominated by the prior.
 
-The flag is exposed on `iterate`, `fit_posteriors`, and `compute_posterior_X` (the new-user inference path). When you set it during training, set it on inference calls too so embeddings are computed under a consistent likelihood. With no missing values it is a no-op.
+The flag is exposed on `iterate`, `fit_posteriors`, and `compute_posteriors` (the new-user inference path). When you set it during training, set it on inference calls too so embeddings are computed under a consistent likelihood. With no missing values it is a no-op.
 
 ### Code example
 
@@ -233,11 +233,11 @@ model = IXPLORE(reactions, pca_initialization=True)
 new_user_answers = pd.Series({'Q1': 0, 'Q15': 1, 'Q30': 0}, name='new_user')
 
 # Get their position in the latent space
-position = model.embed_user(new_user_answers)
+position = model.embed(new_user_answers)
 print(f"New user position: x={position[0]:.3f}, y={position[1]:.3f}")
 
 # --- Impute missing answers, keeping observed values ---
-imputed = model.impute_remaining_answers(new_user_answers)
+imputed = model.impute_answers(new_user_answers)
 print(imputed.head())
 # Q1, Q15, Q30 retain their original values; all others are filled with predictions
 
@@ -274,10 +274,10 @@ Input: Reaction matrix R (N users x K items), possibly with missing values
        - Update prediction grid
 
 [INFERENCE]
-  - New user embedding:  model.embed_user(answers)             -> posterior mean
-  - Posterior on grid:   model.compute_posterior_X(answers)    -> (G,) array
+  - New user embedding:  model.embed(answers)            -> posterior mean(s)
+  - Posterior on grid:   model.compute_posteriors(answers)     -> (G,) or (B, G)
   - Answer prediction:   model.predict(positions, items=...)   -> (N, K) probs
-  - Imputation:          model.impute_remaining_answers(...)   -> filled series
+  - Imputation:          model.impute_answers(...)             -> filled series/frame
   - Synthetic samples:   model.sample_answers(..., method=...) -> (num_samples, K)
 ```
 
@@ -310,9 +310,10 @@ Input: Reaction matrix R (N users x K items), possibly with missing values
 | `apply_prior(prior_variance)` | Re-apply a Gaussian prior using cached log-likelihoods (cheap re-evaluation, no full likelihood pass) |
 | `transform_embedding(M)` | Apply a 2×2 linear transformation to the embedding and refit models |
 | `predict(positions, items=None)` | Predict P(Y=1) for items at given 2D positions |
-| `compute_posterior_X(answers, weights=None, scale_likelihoods=False)` | Grid posterior for a given answer vector (used by all single-user inference) |
-| `embed_user(answers)` | Embed a (new or existing) user given their answers |
-| `impute_remaining_answers(answers)` | Impute missing answers for a user via Bayesian marginalization |
+| `compute_posteriors(answers, weights=None)` | Grid posteriors for one user (Series → `(G,)`) or a batch (DataFrame → `(B, G)`) |
+| `embed(answers, weights=None)` | Embed one user (Series → `(2,)`) or a batch (DataFrame → `(B, 2)`) |
+| `predict_answers(answers, weights=None)` | Predict P(Y=1) for every item — branches on `use_point_estimates` (point prediction at embedded position vs. marginalization over the posterior) |
+| `impute_answers(answers, weights=None)` | Fill missing entries via `predict_answers`; observed answers are kept intact |
 | `sample_answers(answers, method)` | Draw synthetic answer vectors (`"rasch"`, `"posterior"`, `"random"`) |
 | `get_embedding()` | Return current user embeddings as a DataFrame |
 | `get_parameters()` | Return item model parameters as a DataFrame |

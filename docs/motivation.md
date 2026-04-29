@@ -52,7 +52,7 @@ Two more recent works are closer in spirit and worth comparing directly.
 | Uncertainty | None (point estimate only) | Full posterior on grid | Bootstrap SEs |
 | Iterative refinement | No | Yes (alternating EM-style) | Yes (textbook EM) |
 | Missing data | Iterative imputation (§4.5) | Bayesian marginalization | Latent variable in EM |
-| New-user inference | Implicit, ad-hoc | First-class API (`embed_user`) | Refit |
+| New-user inference | Implicit, ad-hoc | First-class API (`embed`) | Refit |
 | Visualization | Acknowledged but not central | Primary deliverable | Acknowledged but not central |
 | Scale regime | Hundreds–thousands | Thousands–tens of thousands | Millions |
 

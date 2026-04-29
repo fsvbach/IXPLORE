@@ -105,13 +105,12 @@ def plot_likelihood(
     xx = xplore.X[:, 0].reshape(meshgrid_size, meshgrid_size)
     yy = xplore.X[:, 1].reshape(meshgrid_size, meshgrid_size)
 
-    # Predict probabilities on the grid (single column, derived from the log-prediction cache)
-    Z = np.exp(xplore._log_p_X[:, xplore.items.get_loc(feature)])
-    Z = Z.reshape(xx.shape)
+    # Predict probabilities on the grid for a single item
+    zz = xplore.predict(xplore.X, items=[feature])[:, 0].reshape(xx.shape)
 
     # Plot the decision boundary at 50% probability
-    ax.contour(xx, yy, Z, levels=[0.5], colors="black", linestyles="--")
-    contour = ax.contourf(xx, yy, Z, alpha=0.8, cmap=cmap, levels=np.linspace(0, 1, 11), zorder=1)
+    ax.contour(xx, yy, zz, levels=[0.5], colors="black", linestyles="--")
+    contour = ax.contourf(xx, yy, zz, alpha=0.8, cmap=cmap, levels=np.linspace(0, 1, 11), zorder=1)
     if add_bar:
         cbar = plt.colorbar(contour, ax=ax)
         cbar.set_label('Likelihood')
@@ -133,8 +132,8 @@ def plot_posterior(
     yy = xplore.X[:, 1].reshape(meshgrid_size, meshgrid_size)
 
     # Predict probabilities on the grid
-    Z = xplore.compute_posterior_X(answers, weights=weights)
-    zz = Z.reshape(xx.shape)
+    posterior = xplore.compute_posteriors(answers, weights=weights)
+    zz = posterior.reshape(xx.shape)
 
     # Plot heatmap of probability
     contour = ax.contourf(xx, yy, zz, alpha=0.8, cmap=cmap, zorder=1)
@@ -144,7 +143,7 @@ def plot_posterior(
         cbar.ax.ticklabel_format(style="sci", axis="y", scilimits=(0,0))
 
     # Indicate point estimate
-    x, y = xplore.get_point_estimates(Z[None, :], xplore.X)[0]
+    x, y = xplore.get_point_estimates(posterior[None, :], xplore.X)[0]
     ax.scatter(x, y, marker='x', color='black', s=10, label='Optimized Coordinates', zorder=5)
 
     return fig, ax
