@@ -8,9 +8,8 @@ import pandas as pd
 import numpy as np
 
 from .logger import logger, FitLogger
-from .optimization import fit_logistic_newton, pca_decompose
+from .optimization import fit_logistic_newton, pca_decompose, posterior_means
 from .prior import set_gaussian_prior
-from .posteriors import posterior_means
 from . import utils
 
 

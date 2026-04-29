@@ -11,6 +11,16 @@ def pca_decompose(X: np.ndarray, n_components: int = 2) -> np.ndarray:
     return X_centered @ Vt[:n_components].T
 
 
+def posterior_means(posteriors: np.ndarray, X: np.ndarray) -> np.ndarray:
+    """Mean reduction: (N, G) @ (G, 2) -> (N, 2)."""
+    return posteriors @ X
+
+
+def posterior_maps(posteriors: np.ndarray, X: np.ndarray) -> np.ndarray:
+    """MAP reduction: argmax over G, index into X -> (N, 2)."""
+    return X[np.argmax(posteriors, axis=1)]
+
+
 def fit_logistic_newton(
     X: np.ndarray,
     y: np.ndarray,
