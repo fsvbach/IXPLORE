@@ -9,6 +9,7 @@ import numpy as np
 
 from .logger import logger, FitLogger
 from .optimization import fit_logistic_newton, pca_decompose, posterior_means
+from .metrics import compute_accuracy, compute_mae, compute_spread
 from .prior import set_gaussian_prior
 from . import utils
 
@@ -319,26 +320,14 @@ class IXPLORE:
     # ------------------------------------------------------------------
     def evaluate(self, boundary_threshold: float = 0.05) -> dict[str, float]:
         """Evaluate model fit on training data, returning {mae, accuracy, boundary, spread}."""
-        predictions = pd.DataFrame(self.predict(self.embedding),
-                                   index=self.users,
-                                   columns=self.items)
-        fit_accuracy = 1 - np.abs(self.reactions.round() - predictions.round()).mean().mean()
-        fit_mae = np.mean(np.abs(self.reactions - predictions))
-        lo, hi = self.limits
-        margin = (hi - lo) * boundary_threshold
-        near_border = (
-            (self.embedding[:, 0] - lo < margin) |
-            (hi - self.embedding[:, 0] < margin) |
-            (self.embedding[:, 1] - lo < margin) |
-            (hi - self.embedding[:, 1] < margin)
-        )
-        boundary_fraction = near_border.mean()
-        spread = float(np.sqrt(self.embedding[:, 0].std()**2 + self.embedding[:, 1].std()**2))
+        predictions = self.predict(self.embedding)
+        observed = ~np.isnan(self.reactions)
+        true_vals = self.reactions[observed]
+        pred_vals = predictions[observed]
         return {
-            'mae': float(fit_mae),
-            'accuracy': float(fit_accuracy),
-            'boundary': float(boundary_fraction),
-            'spread': spread,
+            'mae': compute_mae(true_vals, pred_vals),
+            'accuracy': compute_accuracy(true_vals, pred_vals),
+            **compute_spread(self.embedding, self.limits, boundary_threshold),
         }
 
     # ------------------------------------------------------------------
