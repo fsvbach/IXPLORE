@@ -164,22 +164,43 @@ def compute_rasch_values(
         values = np.array([norm.pdf(scores, mu, variance) for mu in answer_options])
         return values / values.sum(axis=0), answer_options
     
-def mean_impute(X: np.ndarray) -> np.ndarray:
-    """Replace NaN values with column means."""
-    col_means = np.nanmean(X, axis=0)
+def mean_impute(
+    X: np.ndarray,
+    column_means: np.ndarray | None = None,
+    fill_empty_columns: float | None = None,
+) -> np.ndarray:
+    """Replace NaN values with column means. If `column_means` is given, those are used directly; otherwise computed from X. Raises on all-NaN columns unless fill_empty_columns is given."""
+    if column_means is None:
+        all_nan_cols = np.where(np.all(np.isnan(X), axis=0))[0]
+        if all_nan_cols.size and fill_empty_columns is None:
+            raise ValueError(f"mean_impute: columns {all_nan_cols.tolist()} are entirely NaN")
+        column_means = np.nanmean(X, axis=0)
+        if all_nan_cols.size:
+            column_means[all_nan_cols] = fill_empty_columns
     X_imputed = X.copy()
     nan_mask = np.isnan(X_imputed)
-    X_imputed[nan_mask] = np.take(col_means, np.where(nan_mask)[1])
+    X_imputed[nan_mask] = np.take(column_means, np.where(nan_mask)[1])
     return X_imputed
 
 
-def iterative_pca_impute(X: np.ndarray, n_components: int = 2, max_iter: int = 5) -> np.ndarray:
-    """Replace NaN values with iterative PCA reconstruction (Grung & Manne 1998)."""
+def iterative_pca_impute(
+    X: np.ndarray,
+    n_components: int = 2,
+    max_iter: int = 5,
+    fill_empty_columns: float | None = None,
+) -> np.ndarray:
+    """Replace NaN values with iterative PCA reconstruction (Grung & Manne 1998). Raises on all-NaN columns unless fill_empty_columns is given."""
     mask = np.isnan(X)
     if not mask.any():
         return X.copy()
 
+    all_nan_cols = np.where(np.all(mask, axis=0))[0]
+    if all_nan_cols.size and fill_empty_columns is None:
+        raise ValueError(f"iterative_pca_impute: columns {all_nan_cols.tolist()} are entirely NaN")
+
     col_means = np.nanmean(X, axis=0)
+    if all_nan_cols.size:
+        col_means[all_nan_cols] = fill_empty_columns
     X_filled = X.copy()
     X_filled[mask] = np.take(col_means, np.where(mask)[1])
 
@@ -204,7 +225,8 @@ def normalize_embedding(
     point sits at ``half_range / scaling`` from the center, leaving a margin
     of ``(scaling - 1)`` inside the limits.
     """
-    assert embedding is not None, "Embedding must be initialized before normalizing."
+    if embedding is None:
+        raise ValueError("Embedding must be initialized before normalizing.")
     limit_center = (limits[0] + limits[1]) / 2
     limit_half_range = (limits[1] - limits[0]) / 2
     centroid = (embedding.max(axis=0) + embedding.min(axis=0)) / 2

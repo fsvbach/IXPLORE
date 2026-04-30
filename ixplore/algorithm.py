@@ -89,8 +89,10 @@ class IXPLORE:
         ### Store weights
         self.weights = None
         if weights is not None:
-            assert weights.index.equals(reactions.index), "weights.index must match reactions.index."
-            assert weights.columns.equals(reactions.columns), "weights.columns must match reactions.columns."
+            if not weights.index.equals(reactions.index):
+                raise ValueError("weights.index must match reactions.index.")
+            if not weights.columns.equals(reactions.columns):
+                raise ValueError("weights.columns must match reactions.columns.")
             self.weights = weights.values.astype(np.float32)
             logger.debug(f"Per-(user, item) weights provided with shape {self.weights.shape}.")
 
@@ -146,29 +148,34 @@ class IXPLORE:
     # ------------------------------------------------------------------
     def load_embedding(self, embedding: pd.DataFrame) -> None:
         """Load pretrained user embeddings from a DataFrame."""
-        assert embedding.index.astype(str).equals(self.users), "User indices in the pretrained embedding do not match the user indices in the data."
-        assert embedding.columns.tolist() == ['x', 'y'], "Columns in the pretrained embedding must be ['x', 'y']."
+        if not embedding.index.astype(str).equals(self.users):
+            raise ValueError("User indices in the pretrained embedding do not match the user indices in the data.")
+        if embedding.columns.tolist() != ['x', 'y']:
+            raise ValueError("Columns in the pretrained embedding must be ['x', 'y'].")
         self.embedding = embedding.values
         logger.debug(f"Pretrained embedding was given.")
 
     def load_models(self, item_parameters: pd.DataFrame) -> None:
         """Load pretrained model parameters."""
-        assert item_parameters.index.astype(str).equals(self.items), "Items in the pretrained model parameters do not match the items in the data."
-        assert item_parameters.columns.tolist() == self.parameter_names, "Columns in the pretrained model parameters do not match the expected columns for the XPLORE model."
+        if not item_parameters.index.astype(str).equals(self.items):
+            raise ValueError("Items in the pretrained model parameters do not match the items in the data.")
+        if item_parameters.columns.tolist() != self.parameter_names:
+            raise ValueError("Columns in the pretrained model parameters do not match the expected columns for the XPLORE model.")
         self.item_parameters = item_parameters.values
         self._recompute_log_predictions()
         logger.debug(f"Pretrained model parameters were given.")
 
     def initialize_with_pca(self) -> None:
         """Initialize user embeddings via PCA on the reaction matrix."""
-        X_imputed = utils.iterative_pca_impute(self.reactions)
+        X_imputed = utils.iterative_pca_impute(self.reactions, fill_empty_columns=0.5)
         self.embedding = pca_decompose(X_imputed, n_components=2)
         self.embedding = utils.normalize_embedding(self.embedding, limits=self.limits)
         logger.debug(f"Initialized embedding with PCA.")
 
     def transform_embedding(self, transformation: np.ndarray) -> None:
         """Apply a 2x2 linear transformation to the embedding and refit models."""
-        assert transformation.shape == (2,2), "Transformation matrix must be of shape (2,2)."
+        if transformation.shape != (2,2):
+            raise ValueError("Transformation matrix must be of shape (2,2).")
         self.embedding = utils.normalize_embedding(self.embedding @ transformation.T, limits=self.limits)
         self.fit_models()
 
@@ -414,7 +421,8 @@ class IXPLORE:
         values = answers.reindex(columns=self.items).values.astype(np.float32)
         finite = ~np.isnan(values)
         if finite.any():
-            assert ((values[finite] >= 0) & (values[finite] <= 1)).all(), "answers must lie in [0, 1]."
+            if not ((values[finite] >= 0) & (values[finite] <= 1)).all():
+                raise ValueError("answers must lie in [0, 1].")
         Y = np.where(finite, values, 0.0).astype(np.float32)
         M = finite.astype(np.float32)
         W = None
@@ -434,8 +442,10 @@ class IXPLORE:
         """
         W = M
         if weights is not None:
-            assert not np.isnan(weights).any(), "NaN in weights array is not allowed."
-            assert (weights >= 0).all(), "Negative weights are not allowed."
+            if np.isnan(weights).any():
+                raise ValueError("NaN in weights array is not allowed.")
+            if not (weights >= 0).all():
+                raise ValueError("Negative weights are not allowed.")
             W = M * weights
         if self.scale_weights:
             n_eff = W.sum(axis=1, keepdims=True)                 # (N, 1)
