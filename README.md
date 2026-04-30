@@ -1,6 +1,6 @@
 # IXPLORE
 
-**Iterative Probabilistic Logistic Regression Embedding:** A Python package for embedding users and questionnaire items in a shared 2D latent space. 
+**Ideal Point Estimation with Iterative Logistic Regression Embeddings:** A Python package for embedding users and questionnaire items in a shared 2D latent space. 
 
 ![IXPLORE overview](https://raw.githubusercontent.com/fsvbach/IXPLORE/refs/heads/main/figures/overview.png)
 
@@ -79,7 +79,7 @@ import numpy as np
 model = IXPLORE(
     reactions,
     prior_variance=1.0,                         # Prior regularization
-    sampling_resolution=100,                    # Grid resolution for posteriors
+    sampling_resolution=200,                    # Grid resolution for posteriors
     limits=(-1, 1),                             # Bounds for both axes (square space)
     pca_initialization=True,                    # Initialize with PCA
     random_state=17                             # For reproducibility
@@ -114,6 +114,18 @@ _ = plot_overview(model, question='Q12', user='1', colors=users.color)
 
 For the full constructor parameters and method reference, see [docs/documentation.md](docs/documentation.md#api-reference).
 
+## Notebooks
+
+Runnable examples live in [notebooks/](notebooks/):
+
+- [demo.ipynb](notebooks/demo.ipynb) — end-to-end workflow: load data, fit, visualize, embed new users, impute answers.
+- [data.ipynb](notebooks/data.ipynb) — generate the synthetic users, binary/Likert/categorical reactions used by the other notebooks.
+- [prior.ipynb](notebooks/prior.ipynb) — sweep `prior_variance` via `apply_prior` and see how the prior shapes the embedding.
+- [weights.ipynb](notebooks/weights.ipynb) — per-(user, item) `weights` and the `scale_weights` flag for sparse responses.
+- [features.ipynb](notebooks/features.ipynb) — non-linear decision boundaries via the `kernel` argument (interaction, quadratic, RFF) on categorical data.
+- [distortion.ipynb](notebooks/distortion.ipynb) — quantify latent-space distortion with `ixplore.metrics.compute_distortion`.
+- [timing.ipynb](notebooks/timing.ipynb) — runtime breakdown and scaling in `n_users`, `n_items`, and `sampling_resolution`.
+
 ## Dependencies
 
 - numpy
@@ -133,7 +145,7 @@ If you use IXPLORE in your research, please cite:
 ```bibtex
 @software{bachmann2026ixplore,
   author       = {Bachmann, Fynn},
-  title        = {IXPLORE: Iterative Probabilistic Logistic Regression Embedding},
+  title        = {IXPLORE: Ideal Point Estimation with Iterative Logistic Regression Embeddings},
   year         = {2026},
   publisher    = {GitHub},
   url          = {https://github.com/fsvbach/ixplore}
@@ -142,4 +154,4 @@ If you use IXPLORE in your research, please cite:
 
 Or in text format:
 
-> Bachmann, F. (2026). IXPLORE: Iterative Probabilistic Logistic Regression Embedding. GitHub. https://github.com/fsvbach/ixplore
+> Bachmann, F. (2026). IXPLORE: Ideal Point Estimation with Iterative Logistic Regression Embeddings. GitHub. https://github.com/fsvbach/ixplore

@@ -1,6 +1,6 @@
 # IXPLORE Documentation
 
-**Iterative Probabilistic Logistic Regression Embedding**
+**Ideal Point Estimation with Iterative Logistic Regression Embeddings**
 
 This document walks through IXPLORE's algorithm in the order it executes — initialization, posterior computation, iterative refinement, and inference — and then provides the full API reference. For the high-level pitch and installation, see the [README](../README.md). For the design rationale behind the modeling choices (bounded 2D space, grid inference, BCE likelihood, posterior mean over MAP), see [motivation.md](motivation.md).
 
@@ -48,6 +48,10 @@ Alternatively, you can initialize with random positions instead of PCA:
 ```python
 model = IXPLORE(reactions, pca_initialization=False, random_state=17)
 ```
+
+### Notebooks
+
+The synthetic users, binary/Likert/categorical reaction matrices used throughout the docs are generated in [notebooks/data.ipynb](../notebooks/data.ipynb).
 
 
 ## Stage 2: Posterior Computation
@@ -122,6 +126,8 @@ model.fit_posteriors()
 model.apply_prior(prior_variance=0.3)
 ```
 
+See [notebooks/prior.ipynb](../notebooks/prior.ipynb) for a `prior_variance` sweep that reuses cached log-likelihoods via `apply_prior` and compares the resulting embeddings.
+
 ### Notebook
 
 See [notebooks/demo.ipynb](../notebooks/demo.ipynb) for posterior visualizations showing how uncertainty decreases as more answers are provided and how the prior influences the posterior shape.
@@ -151,6 +157,8 @@ By default, every observed answer contributes one log-likelihood term to its use
 When `scale_weights=True`, each user's per-item weight row is rescaled so it sums to `K` (the full item count), independent of how many items they observed. This rescales the *effective* sample size to `K` for every user, so users with sparse responses are pulled by their data with the same total weight as users with dense responses. Useful when response sparsity varies substantially across users and you don't want sparse users to be dominated by the prior.
 
 `scale_weights` is a constructor flag stored on the model; the same setting applies to training (`iterate`, `fit_posteriors`) and to new-user inference (`compute_posteriors`, `embed`, etc.) so embeddings are computed under a consistent likelihood. With no missing values and uniform weights it is a no-op.
+
+See [notebooks/weights.ipynb](../notebooks/weights.ipynb) for worked examples of per-(user, item) `weights` at inference time and the effect of `scale_weights` on sparse responses.
 
 ### Code example
 
@@ -285,6 +293,22 @@ Input: Reaction matrix R (N users x K items), possibly with missing values
 
 ---
 
+## Topic notebooks
+
+Each notebook in [notebooks/](../notebooks/) isolates one aspect of the model:
+
+| Notebook | What it covers |
+|----------|----------------|
+| [demo.ipynb](../notebooks/demo.ipynb) | End-to-end walkthrough used as the running example throughout this document. |
+| [data.ipynb](../notebooks/data.ipynb) | Generates the synthetic users and binary/Likert/categorical reaction matrices. |
+| [prior.ipynb](../notebooks/prior.ipynb) | Sweeps `prior_variance` through `apply_prior` and shows the effect on the embedding. |
+| [weights.ipynb](../notebooks/weights.ipynb) | Per-(user, item) `weights` and the `scale_weights` flag. |
+| [features.ipynb](../notebooks/features.ipynb) | Non-linear decision boundaries via the `kernel` argument (interaction, quadratic, RFF). |
+| [distortion.ipynb](../notebooks/distortion.ipynb) | Round-trip latent-space distortion using `ixplore.metrics.compute_distortion`. |
+| [timing.ipynb](../notebooks/timing.ipynb) | Per-step runtime breakdown and scaling in `n_users`, `n_items`, `sampling_resolution`. |
+
+---
+
 ## API Reference
 
 ### Constructor parameters
@@ -293,7 +317,7 @@ Input: Reaction matrix R (N users x K items), possibly with missing values
 |-----------|------|---------|-------------|
 | `reactions` | pd.DataFrame | required | User-item reaction matrix (users as index, items as columns) |
 | `prior_variance` | float | 1.0 | Diagonal entry of the Gaussian prior covariance matrix |
-| `sampling_resolution` | int | 100 | Grid resolution per axis for posterior computation |
+| `sampling_resolution` | int | 200 | Grid resolution per axis for posterior computation |
 | `limits` | tuple | (-1, 1) | (min, max) limits applied to both axes of the square latent space |
 | `pretrained_models` | pd.DataFrame | None | Optional pretrained item parameters |
 | `pretrained_embedding` | pd.DataFrame | None | Optional pretrained user embedding |

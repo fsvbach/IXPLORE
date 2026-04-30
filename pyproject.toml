@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ixplore"
-version = "0.2"
-description = "Iterative Probabilistic Logistic Regression Embedding"
+version = "0.3"
+description = "Ideal Point Estimation with Iterative Logistic Regression Embeddings"
 authors = [
     {name = "Fynn Bachmann", email = "fynn.bachmann@uzh.ch"}
 ]
