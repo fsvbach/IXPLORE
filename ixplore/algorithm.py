@@ -34,7 +34,7 @@ class IXPLORE:
         transformation: np.ndarray = np.identity(2),
         kernel: Callable[[np.ndarray], np.ndarray] | None = None,
         use_point_estimates: bool = True,
-        normalize_likelihoods: bool = True,
+        scale_weights: bool = False,
     ) -> None:
         """Initialize the IXPLORE model.
 
@@ -65,13 +65,13 @@ class IXPLORE:
         use_point_estimates: bool
             Default for `fit_models`: if True, fit each item on the users' posterior-mean point
             estimates; if False, fit on the grid using the full posteriors as sample weights.
-        normalize_likelihoods: bool
-            Default for `fit_posteriors`: if True, rescale per-user likelihoods so users with
-            sparse responses are not penalized by having fewer observed terms.
+        scale_weights: bool
+            If True, rescale per-user weights so each user's row sums to K (the
+            full item count), independent of how many items they observed. Default False.
         """
         self.kernel = kernel if kernel is not None else lambda X: X
         self.use_point_estimates = use_point_estimates
-        self.normalize_likelihoods = normalize_likelihoods
+        self.scale_weights = scale_weights
         self.get_point_estimates = posterior_means
 
         ### Store data as numpy arrays
@@ -358,6 +358,7 @@ class IXPLORE:
     # Private helpers
     # ------------------------------------------------------------------
     def _log_metrics(self, prefix: str = "", level: int = logging.INFO) -> None:
+        """Compute and log evaluation metrics with an optional prefix."""
         metrics = self.evaluate()
         self.fit_logger.log(metrics)
         body = ", ".join(f"{k}: {v:.4f}" for k, v in metrics.items())
@@ -431,24 +432,14 @@ class IXPLORE:
             assert not np.isnan(weights).any(), "NaN in weights array is not allowed."
             assert (weights >= 0).all(), "Negative weights are not allowed."
             W = M * weights
-        if self.normalize_likelihoods:
+        if self.scale_weights:
             n_eff = W.sum(axis=1, keepdims=True)                 # (N, 1)
             scale = np.where(n_eff > 0, self.number_of_items / np.maximum(n_eff, 1), 0.0)
             W = W * scale
         return (W * Y) @ self._log_p1.T + (W * (1.0 - Y)) @ self._log_p0.T
 
     def _recompute_log_predictions(self) -> None:
-        """Recompute the per-grid-cell log-prediction tables from item_parameters.
-
-        Computes the logit z_k(g) = beta_k . phi(g) + alpha_k at every grid cell
-        and stores log p_k(g) = log_sigmoid(z) and log(1 - p_k(g)) = log_sigmoid(-z).
-        Using `log_expit` directly on the logit avoids the asymmetry of going
-        through `expit` then `log`: at |z| ≈ 18, expit(z) is within machine
-        precision of 1, so `log(expit(z))` collapses to 0 even though the true
-        value is -2e-9 — while `log(1 - expit(z)) = -18` stays exact. That
-        asymmetry caps how much weight can pull the posterior toward an item's
-        favoured side.
-        """
+        """Recompute the per-grid-cell log-prediction tables from item_parameters."""
         Z = self.predict(self.X, logits=True)            # (G, K) logits
         self._log_p1 = log_expit(Z).astype(np.float32)    # (G, K)  log p_k(g)
         self._log_p0 = log_expit(-Z).astype(np.float32) # (G, K)  log (1 - p_k(g))

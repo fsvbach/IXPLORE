@@ -144,13 +144,13 @@ Each iteration consists of two steps:
 
 The convergence of this process is measured by decreasing MAE (mean absolute error) and increasing accuracy on the training data, tracked in `model.fit_logger`.
 
-### Sparse responses: `scale_likelihoods`
+### Sparse responses: `scale_weights`
 
 By default, every observed answer contributes one log-likelihood term to its user's posterior. Users who answered few questions therefore have flatter likelihoods than users who answered many, and the prior dominates their embedding more strongly.
 
-When `scale_likelihoods=True`, each user's log-likelihood is multiplied by `K / K_obs_n` (number of items / number of observed answers for that user). This rescales the *effective* sample size to `K` for every user, so users with sparse responses are pulled by their data with the same total weight as users with dense responses. Useful when response sparsity varies substantially across users and you don't want sparse users to be dominated by the prior.
+When `scale_weights=True`, each user's per-item weight row is rescaled so it sums to `K` (the full item count), independent of how many items they observed. This rescales the *effective* sample size to `K` for every user, so users with sparse responses are pulled by their data with the same total weight as users with dense responses. Useful when response sparsity varies substantially across users and you don't want sparse users to be dominated by the prior.
 
-The flag is exposed on `iterate`, `fit_posteriors`, and `compute_posteriors` (the new-user inference path). When you set it during training, set it on inference calls too so embeddings are computed under a consistent likelihood. With no missing values it is a no-op.
+`scale_weights` is a constructor flag stored on the model; the same setting applies to training (`iterate`, `fit_posteriors`) and to new-user inference (`compute_posteriors`, `embed`, etc.) so embeddings are computed under a consistent likelihood. With no missing values and uniform weights it is a no-op.
 
 ### Code example
 
@@ -170,7 +170,9 @@ model.iterate(n_iterations=5)
 model.iterate(n_iterations=5, point_estimates=False)
 
 # Or equalize effective sample size across users with varying response sparsity
-model.iterate(n_iterations=5, scale_likelihoods=True)
+# (set on the constructor, then iterate normally)
+model = IXPLORE(reactions, scale_weights=True, random_state=17)
+model.iterate(n_iterations=5)
 
 # Check fit quality
 metrics = model.evaluate()
@@ -299,13 +301,15 @@ Input: Reaction matrix R (N users x K items), possibly with missing values
 | `random_state` | int | 0 | Random seed for reproducibility |
 | `transformation` | np.ndarray | identity(2) | 2×2 linear transformation applied to the initial embedding |
 | `kernel` | callable | None | Feature transform `(N, 2) -> (N, D)` for polynomial / RFF features |
+| `use_point_estimates` | bool | True | Default for `fit_models`: fit each item on posterior-mean embeddings (True) or on the grid weighted by full posteriors (False) |
+| `scale_weights` | bool | False | Rescale each user's per-item weight row to sum to `K`, equalizing effective sample size across users with varying response sparsity |
 
 ### Key methods
 
 | Method | Description |
 |--------|-------------|
-| `iterate(n_iterations, point_estimates=True, scale_likelihoods=False)` | Alternate posterior fitting and model updating for n iterations |
-| `fit_posteriors(scale_likelihoods=False)` | Compute posterior distributions for all users and update the embedding |
+| `iterate(n_iterations)` | Alternate posterior fitting and model updating for n iterations |
+| `fit_posteriors()` | Compute posterior distributions for all users and update the embedding |
 | `fit_models(point_estimates=True)` | Fit each item on posterior-mean embeddings (default) or on the grid weighted by full posteriors (`point_estimates=False`) |
 | `apply_prior(prior_variance)` | Re-apply a Gaussian prior using cached log-likelihoods (cheap re-evaluation, no full likelihood pass) |
 | `transform_embedding(M)` | Apply a 2×2 linear transformation to the embedding and refit models |
