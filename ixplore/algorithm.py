@@ -25,7 +25,7 @@ class IXPLORE:
         reactions: pd.DataFrame,
         weights: pd.DataFrame | None = None,
         prior_variance: float = 1.0,
-        sampling_resolution: int = 100,
+        sampling_resolution: int = 200,
         limits: tuple[float, float] = (-1, 1),
         pretrained_models: pd.DataFrame = None,
         pretrained_embedding: pd.DataFrame = None,
@@ -35,6 +35,7 @@ class IXPLORE:
         kernel: Callable[[np.ndarray], np.ndarray] | None = None,
         use_point_estimates: bool = True,
         scale_weights: bool = False,
+        model_regularization: float = 1e-8,
     ) -> None:
         """Initialize the IXPLORE model.
 
@@ -68,10 +69,14 @@ class IXPLORE:
         scale_weights: bool
             If True, rescale per-user weights so each user's row sums to K (the
             full item count), independent of how many items they observed. Default False.
+        model_regularization: float
+            L2 regularization strength on the per-item logistic regression coefficients.
+            Larger values shrink the coefficients toward zero.
         """
         self.kernel = kernel if kernel is not None else lambda X: X
         self.use_point_estimates = use_point_estimates
         self.scale_weights = scale_weights
+        self.model_regularization = model_regularization
         self.get_point_estimates = posterior_means
 
         ### Store data as numpy arrays
@@ -371,7 +376,7 @@ class IXPLORE:
             mask = ~np.isnan(self.reactions[:, k])
             train_data = self.kernel(self.embedding[mask])  # (N_k, D)
             train_labels = self.reactions[mask, k]                     # (N_k,)
-            params = fit_logistic_newton(train_data, train_labels, regularization=1e-8)
+            params = fit_logistic_newton(train_data, train_labels, regularization=self.model_regularization)
             item_parameters.append(params)
         return item_parameters
 
@@ -386,7 +391,7 @@ class IXPLORE:
             W_g = posteriors_k.sum(axis=0)                # (G,)
             A_g = posteriors_k.T @ labels_k               # (G,)
             y_eff = np.divide(A_g, W_g, out=np.zeros_like(A_g), where=W_g > 0)
-            params = fit_logistic_newton(self.X_transformed, y_eff, sample_weight=W_g, regularization=1e-8)
+            params = fit_logistic_newton(self.X_transformed, y_eff, sample_weight=W_g, regularization=self.model_regularization)
             item_parameters.append(params)
         return item_parameters
 

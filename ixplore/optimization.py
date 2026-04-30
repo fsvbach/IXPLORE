@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
-from scipy.special import expit
+from scipy.special import expit, log_expit
 
 
 def pca_decompose(X: np.ndarray, n_components: int = 2) -> np.ndarray:
@@ -25,32 +25,16 @@ def fit_logistic_newton(
     X: np.ndarray,
     y: np.ndarray,
     sample_weight: np.ndarray | None = None,
-    regularization: float = 1e-6,
+    regularization: float = 1e-4,
     max_iter: int = 50,
     tol: float = 1e-6,
+    min_step_size: float = 1e-8,
 ) -> np.ndarray:
-    """Fit logistic regression via Newton's method with soft labels and sample weights.
+    """Fit L2-penalized logistic regression by Newton's method with backtracking.
 
-    Parameters
-    ----------
-    X : np.ndarray of shape (N, D)
-        Feature matrix (may be raw 2D coordinates or transformed features).
-    y : np.ndarray of shape (N,)
-        Labels in [0, 1] (soft labels allowed).
-    sample_weight : np.ndarray of shape (N,) or None
-        Per-sample weights. If None, uniform weights are used.
-    regularization : float
-        L2 regularization strength (small = weak regularization).
-    max_iter : int
-        Maximum number of Newton iterations (safety cap).
-    tol : float
-        Convergence tolerance on the max-abs Newton step. Iteration stops once
-        `max(|step|) < tol`.
-
-    Returns
-    -------
-    np.ndarray of shape (1, D+1)
-        Fitted parameters [beta1, ..., betaD, alpha].
+    Each Newton step is halved until the new loss is finite and non-increasing, or
+    until the step fraction falls below `min_step_size`. Iteration stops once the
+    accepted step has max absolute value below `tol`. Returns `[beta_1, ..., beta_D, alpha]`.
     """
     X_aug = np.column_stack([X, np.ones(len(X))])  # (N, D+1)
     D = X_aug.shape[1]
@@ -59,14 +43,29 @@ def fit_logistic_newton(
     if sample_weight is None:
         sample_weight = np.ones(len(X))
 
+    def neg_log_lik(w_):
+        z = X_aug @ w_
+        return -np.sum(sample_weight * (y * log_expit(z) + (1 - y) * log_expit(-z))) \
+            + 0.5 * regularization * np.dot(w_, w_)
+
+    loss = neg_log_lik(w)
     for _ in range(max_iter):
         p = expit(X_aug @ w)
         grad = X_aug.T @ (sample_weight * (p - y)) + regularization * w
         s = sample_weight * p * (1 - p)
         H = (X_aug.T * s) @ X_aug + regularization * np.eye(D)
         step = np.linalg.solve(H, grad)
-        w -= step
-        if np.max(np.abs(step)) < tol:
+
+        alpha = 1.0
+        while alpha > min_step_size:
+            w_new = w - alpha * step
+            new_loss = neg_log_lik(w_new)
+            if np.isfinite(new_loss) and new_loss <= loss:
+                break
+            alpha *= 0.5
+        w, loss = w_new, new_loss
+
+        if np.max(np.abs(alpha * step)) < tol:
             break
 
     return w.reshape(1, D)
