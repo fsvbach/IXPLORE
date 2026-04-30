@@ -27,6 +27,7 @@ def fit_logistic_newton(
     sample_weight: np.ndarray | None = None,
     regularization: float = 1e-6,
     max_iter: int = 50,
+    tol: float = 1e-6,
 ) -> np.ndarray:
     """Fit logistic regression via Newton's method with soft labels and sample weights.
 
@@ -41,7 +42,10 @@ def fit_logistic_newton(
     regularization : float
         L2 regularization strength (small = weak regularization).
     max_iter : int
-        Maximum number of Newton iterations.
+        Maximum number of Newton iterations (safety cap).
+    tol : float
+        Convergence tolerance on the max-abs Newton step. Iteration stops once
+        `max(|step|) < tol`.
 
     Returns
     -------
@@ -60,6 +64,9 @@ def fit_logistic_newton(
         grad = X_aug.T @ (sample_weight * (p - y)) + regularization * w
         s = sample_weight * p * (1 - p)
         H = (X_aug.T * s) @ X_aug + regularization * np.eye(D)
-        w -= np.linalg.solve(H, grad)
+        step = np.linalg.solve(H, grad)
+        w -= step
+        if np.max(np.abs(step)) < tol:
+            break
 
     return w.reshape(1, D)
