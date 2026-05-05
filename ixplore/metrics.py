@@ -68,7 +68,7 @@ def compute_spread(
         | (hi - embedding[:, 1] < margin)
     )
     spread = float(np.sqrt(embedding[:, 0].std() ** 2 + embedding[:, 1].std() ** 2))
-    return {"spread": spread, "boundary": float(near_border.mean())}
+    return {"spread": round(spread, 4), "boundary": round(float(near_border.mean()), 4)}
 
 
 def compute_distortion(

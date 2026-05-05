@@ -164,6 +164,20 @@ def compute_rasch_values(
         values = np.array([norm.pdf(scores, mu, variance) for mu in answer_options])
         return values / values.sum(axis=0), answer_options
     
+def compute_column_means(
+    X: np.ndarray,
+    fill_empty_columns: float | None = None,
+) -> np.ndarray:
+    """Column means of X ignoring NaN. Empty columns get `fill_empty_columns`, or raise if None."""
+    empty = np.all(np.isnan(X), axis=0)
+    if empty.any() and fill_empty_columns is None:
+        raise ValueError(f"compute_column_means: columns {np.where(empty)[0].tolist()} are entirely NaN")
+    means = np.full(X.shape[1], fill_empty_columns if fill_empty_columns is not None else np.nan, dtype=float)
+    if (~empty).any():
+        means[~empty] = np.nanmean(X[:, ~empty], axis=0)
+    return means
+
+
 def mean_impute(
     X: np.ndarray,
     column_means: np.ndarray | None = None,
@@ -171,12 +185,7 @@ def mean_impute(
 ) -> np.ndarray:
     """Replace NaN values with column means. If `column_means` is given, those are used directly; otherwise computed from X. Raises on all-NaN columns unless fill_empty_columns is given."""
     if column_means is None:
-        all_nan_cols = np.where(np.all(np.isnan(X), axis=0))[0]
-        if all_nan_cols.size and fill_empty_columns is None:
-            raise ValueError(f"mean_impute: columns {all_nan_cols.tolist()} are entirely NaN")
-        column_means = np.nanmean(X, axis=0)
-        if all_nan_cols.size:
-            column_means[all_nan_cols] = fill_empty_columns
+        column_means = compute_column_means(X, fill_empty_columns=fill_empty_columns)
     X_imputed = X.copy()
     nan_mask = np.isnan(X_imputed)
     X_imputed[nan_mask] = np.take(column_means, np.where(nan_mask)[1])
@@ -194,13 +203,7 @@ def iterative_pca_impute(
     if not mask.any():
         return X.copy()
 
-    all_nan_cols = np.where(np.all(mask, axis=0))[0]
-    if all_nan_cols.size and fill_empty_columns is None:
-        raise ValueError(f"iterative_pca_impute: columns {all_nan_cols.tolist()} are entirely NaN")
-
-    col_means = np.nanmean(X, axis=0)
-    if all_nan_cols.size:
-        col_means[all_nan_cols] = fill_empty_columns
+    col_means = compute_column_means(X, fill_empty_columns=fill_empty_columns)
     X_filled = X.copy()
     X_filled[mask] = np.take(col_means, np.where(mask)[1])
 
