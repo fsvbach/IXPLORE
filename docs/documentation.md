@@ -1,6 +1,6 @@
 # IXPLORE Documentation
 
-**Ideal Point Estimation with Iterative Logistic Regression Embeddings**
+**Bounded Ideal Point Estimation with Iterative Logistic Regression Embeddings**
 
 This document walks through IXPLORE's algorithm in the order it executes — initialization, posterior computation, iterative refinement, and inference — and then provides the full API reference. For the high-level pitch and installation, see the [README](../README.md). For the design rationale behind the modeling choices (bounded 2D space, grid inference, BCE likelihood, posterior mean over MAP), see [motivation.md](motivation.md).
 
