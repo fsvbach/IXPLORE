@@ -24,8 +24,13 @@ def compute_mae(true_vals: np.ndarray, pred_vals: np.ndarray) -> float:
     return float(np.mean(np.abs(true_vals - pred_vals)))
 
 
-def compute_accuracy(true_vals: np.ndarray, pred_vals: np.ndarray) -> float:
-    return float(1 - np.mean(np.abs(np.round(true_vals) - np.round(pred_vals))))
+def compute_accuracy(
+    true_vals: np.ndarray,
+    pred_vals: np.ndarray,
+    neutral_window: float = 0.05,
+) -> float:
+    mask = np.abs(true_vals - 0.5) > neutral_window
+    return float(((pred_vals[mask] > 0.5) == (true_vals[mask] > 0.5)).mean())
 
 
 def compute_rmse(true_vals: np.ndarray, pred_vals: np.ndarray) -> float:
@@ -56,7 +61,7 @@ def compute_spread(
     Returns
     -------
     {"spread", "boundary"}
-        spread   : sqrt(var_x + var_y).
+        spread   : total variance var_x + var_y.
         boundary : fraction of points within `threshold * (hi - lo)` of any edge.
     """
     lo, hi = limits
@@ -67,14 +72,14 @@ def compute_spread(
         | (embedding[:, 1] - lo < margin)
         | (hi - embedding[:, 1] < margin)
     )
-    spread = float(np.sqrt(embedding[:, 0].std() ** 2 + embedding[:, 1].std() ** 2))
+    spread = float(embedding[:, 0].std() ** 2 + embedding[:, 1].std() ** 2)
     return {"spread": round(spread, 4), "boundary": round(float(near_border.mean()), 4)}
 
 
 def compute_distortion(
     model,
     resolution: int = 30,
-    sparsity: float | None = None,
+    keep_fraction: float | None = None,
     random_state: int = 0,
 ) -> tuple[np.ndarray, np.ndarray, float, float]:
     """Sample synthetic users on a grid, re-embed, and report displacement stats.
@@ -89,8 +94,8 @@ def compute_distortion(
         Fitted model.
     resolution : int
         Grid points per axis.
-    sparsity : float | None
-        If not None, fraction of items KEPT per synthetic user (in (0, 1]).
+    keep_fraction : float | None
+        If not None, fraction of items kept per synthetic user (in (0, 1]).
         None ⇒ full responses.
     random_state : int
         Seed for the sparsity mask.
@@ -105,9 +110,9 @@ def compute_distortion(
     grid = utils.create_meshgrid(model.limits, model.limits, resolution)
     responses = pd.DataFrame(model.predict(grid), columns=model.items)
 
-    if sparsity is not None:
+    if keep_fraction is not None:
         rng = np.random.default_rng(random_state)
-        responses = utils.add_sparsity(responses, keep_fraction=sparsity, generator=rng)
+        responses = utils.add_sparsity(responses, keep_fraction=keep_fraction, generator=rng)
 
     reembedded = model.embed(responses)
 
