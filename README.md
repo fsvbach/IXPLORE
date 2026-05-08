@@ -109,7 +109,7 @@ from ixplore.visualization import plot_overview
 users = pd.read_csv('../data/synthetic_users.csv', index_col=0)
 
 # Plot user embeddings
-_ = plot_overview(model, question='Q12', user='1', colors=users.color)
+_ = plot_overview(model, question='Q12', user='159', colors=users.color)
 ```
 
 For the full constructor parameters and method reference, see [docs/documentation.md](docs/documentation.md#api-reference).

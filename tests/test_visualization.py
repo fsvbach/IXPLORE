@@ -8,7 +8,7 @@ import pytest
 from ixplore import IXPLORE
 from ixplore.visualization import (
     plot_embedding,
-    plot_likelihood,
+    plot_predictions,
     plot_posterior,
     plot_overview,
 )
@@ -33,8 +33,8 @@ def test_plot_embedding_with_user(xplore: IXPLORE) -> None:
     plot_embedding(xplore.get_embedding(), user=xplore.users[0])
 
 
-def test_plot_likelihood(xplore: IXPLORE) -> None:
-    plot_likelihood(xplore, feature=xplore.items[0])
+def test_plot_predictions(xplore: IXPLORE) -> None:
+    plot_predictions(xplore, feature=xplore.items[0])
 
 
 def test_plot_posterior(xplore: IXPLORE, answers: pd.Series) -> None:

@@ -92,7 +92,7 @@ def plot_embedding(
     return ax
 
 
-def plot_likelihood(
+def plot_predictions(
     xplore: IXPLORE,
     feature: str,
     cmap: Colormap = colormap,
@@ -113,7 +113,7 @@ def plot_likelihood(
     contour = ax.contourf(xx, yy, zz, alpha=0.8, cmap=cmap, levels=np.linspace(0, 1, 11), zorder=1)
     if add_bar:
         cbar = plt.colorbar(contour, ax=ax)
-        cbar.set_label('Likelihood')
+        cbar.set_label('p(y=1 | x)')
     return fig, ax
 
 
@@ -139,7 +139,7 @@ def plot_posterior(
     contour = ax.contourf(xx, yy, zz, alpha=0.8, cmap=cmap, zorder=1)
     if add_bar:
         cbar = plt.colorbar(contour, ax=ax)
-        cbar.set_label('Probability')
+        cbar.set_label('p(x | answers)')
         cbar.ax.ticklabel_format(style="sci", axis="y", scilimits=(0,0))
 
     # Indicate point estimate
@@ -158,20 +158,22 @@ def plot_overview(
     figsize: tuple[float, float] = (7, 2.5),
 ) -> tuple[Figure | SubFigure, tuple[axes.Axes, axes.Axes]]:
     """
-    Plot an overview of the posterior distribution for a user and the likelihood for a question, along with the embedding.
-    
+    Plot an overview of the posterior p(x | answers) for a user and the predictions p(y=1 | x) for a question, along with the embedding.
+
     Parameters
     ----------
     xplore : IXPLORE
-        The IXPLORE model instance containing the data and methods for computing the posterior and likelihood.
+        The IXPLORE model instance containing the data and methods for computing the posterior and predictions.
     question : str
-        The question for which to plot the likelihood.
+        The question for which to plot the predictions p(y=1 | x).
     user : str
         The user for whom to plot the posterior distribution. If None, the posterior plot will be skipped. Default is None.
     colors : array-like or str, optional
-        The colors to use for the embedding points. Can be a single color or an array of colors corresponding to each point. Default is 'black'.
+        The colors to use for the embedding points. Can be a single color or an array of colors corresponding to each point. Default is 'gray'.
     cmap : Colormap, optional
-        The size of the figure in inches. Default is (7, 4).
+        Colormap used to map the question's observed answers to point colors in the right panel. Default is matplotlib's 'viridis'.
+    figsize : tuple of float, optional
+        The size of the figure in inches. Default is (7, 2.5).
     """
     fig, (ax1, ax2) = plt.subplots(1,2, figsize=figsize)
 
@@ -187,11 +189,11 @@ def plot_overview(
 
     i = xplore.items.get_loc(question)
     q_answers = np.array(list(map(cmap, xplore.reactions[:,i].astype(float))))
-    plot_likelihood(xplore, question, ax=ax2)
+    plot_predictions(xplore, question, ax=ax2)
     plot_embedding(xplore.get_embedding(), colors=q_answers, s=60,
                    user=user, highlight={'s': 60, 'edgecolor': 'white'},
                    ax=ax2)
-    ax2.set_title(f'Likelihood for Question {question}')
+    ax2.set_title(f'Predictions for Question {question}')
 
     # Remove axis ticks and labels
     for ax in (ax1, ax2):

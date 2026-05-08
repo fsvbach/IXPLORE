@@ -97,7 +97,7 @@ model = IXPLORE(reactions, pca_initialization=True)
 model.fit_posteriors()
 
 # Visualize the posterior of a specific user overlaid on the embedding
-fig, (ax1, ax2) = plot_overview(model, question='Q15', user='1', colors=users.color, figsize=(7, 2.5))
+fig, (ax1, ax2) = plot_overview(model, question='Q15', user='159', colors=users.color, figsize=(7, 2.5))
 
 # You can also compute a posterior for a new user with partial answers
 new_user = pd.Series({'Q15': 0, 'Q1': 1}, name='new_user')
