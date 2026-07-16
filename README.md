@@ -1,6 +1,6 @@
 # IXPLORE
 
-**Bounded Ideal Point Estimation with Iterative Logistic Regression Embeddings:** A Python package for embedding users and questionnaire items in a shared 2D latent space. 
+**Bounded Ideal Point Estimation with Grid-Based Uncertainty Quantification:** A Python package for embedding users and questionnaire items in a shared 2D latent space. 
 
 ![IXPLORE overview](https://raw.githubusercontent.com/fsvbach/IXPLORE/refs/heads/main/figures/overview.png)
 
@@ -145,7 +145,7 @@ If you use IXPLORE in your research, please cite:
 ```bibtex
 @software{bachmann2026ixplore,
   author       = {Bachmann, Fynn},
-  title        = {IXPLORE: Bounded Ideal Point Estimation with Iterative Logistic Regression Embeddings},
+  title        = {IXPLORE: Bounded Ideal Point Estimation with Grid-Based Uncertainty Quantification},
   year         = {2026},
   publisher    = {GitHub},
   url          = {https://github.com/fsvbach/ixplore}
@@ -154,4 +154,4 @@ If you use IXPLORE in your research, please cite:
 
 Or in text format:
 
-> Bachmann, F. (2026). IXPLORE: Bounded Ideal Point Estimation with Iterative Logistic Regression Embeddings. GitHub. https://github.com/fsvbach/ixplore
+> Bachmann, F. (2026). IXPLORE: Bounded Ideal Point Estimation with Grid-Based Uncertainty Quantification. GitHub. https://github.com/fsvbach/ixplore

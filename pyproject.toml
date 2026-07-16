@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ixplore"
-version = "1.0"
-description = "Bounded Ideal Point Estimation with Iterative Logistic Regression Embeddings"
+version = "1.2"
+description = "Bounded Ideal Point Estimation with Grid-Based Uncertainty Quantification"
 authors = [
     {name = "Fynn Bachmann", email = "fynn.bachmann@uzh.ch"}
 ]

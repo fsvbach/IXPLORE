@@ -156,6 +156,7 @@ def plot_overview(
     colors: np.ndarray | str = 'gray',
     cmap: Colormap = plt.colormaps['viridis'],
     figsize: tuple[float, float] = (7, 2.5),
+    **kwargs: Any,
 ) -> tuple[Figure | SubFigure, tuple[axes.Axes, axes.Axes]]:
     """
     Plot an overview of the posterior p(x | answers) for a user and the predictions p(y=1 | x) for a question, along with the embedding.
@@ -174,13 +175,18 @@ def plot_overview(
         Colormap used to map the question's observed answers to point colors in the right panel. Default is matplotlib's 'viridis'.
     figsize : tuple of float, optional
         The size of the figure in inches. Default is (7, 2.5).
+    **kwargs : Any
+        Additional keyword arguments passed to `plot_embedding` (e.g. `s`, `lw`, `alpha`). The user highlight size follows `s`.
     """
     fig, (ax1, ax2) = plt.subplots(1,2, figsize=figsize)
 
-    plot_embedding(xplore.get_embedding(), colors=colors, s=60,
-                   user=user, highlight={'s': 60, 'edgecolor': 'white'},
-                   ax=ax1)
-    
+    kwargs.setdefault('s', 60)
+    highlight = {'s': kwargs['s'], 'edgecolor': 'white'}
+
+    plot_embedding(xplore.get_embedding(), colors=colors,
+                   user=user, highlight=highlight,
+                   ax=ax1, **kwargs)
+
     # Plot posterior for the user if specified
     if user is not None:
         user_answers, user_weights = xplore.get_reactions(user)
@@ -190,9 +196,9 @@ def plot_overview(
     i = xplore.items.get_loc(question)
     q_answers = np.array(list(map(cmap, xplore.reactions[:,i].astype(float))))
     plot_predictions(xplore, question, ax=ax2)
-    plot_embedding(xplore.get_embedding(), colors=q_answers, s=60,
-                   user=user, highlight={'s': 60, 'edgecolor': 'white'},
-                   ax=ax2)
+    plot_embedding(xplore.get_embedding(), colors=q_answers,
+                   user=user, highlight=highlight,
+                   ax=ax2, **kwargs)
     ax2.set_title(f'Predictions for Question {question}')
 
     # Remove axis ticks and labels
